@@ -261,7 +261,7 @@ if __name__ == "__main__":
     while env.agent.alive and env.monsters:
         env.render()
         env.step()
-        time.sleep(0.01)
+        time.sleep(0)
     env.render()
     print("\nVictory!" if env.agent.alive else "\nGame Over!")
     print(f"Level: {env.agent.level}, Kills: {env.agent.kills}, Turns: {env.turn}")
