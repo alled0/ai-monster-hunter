@@ -158,7 +158,7 @@ class Agent:
                 env.monsters.pop(target_pos)
 
 class Environment:
-    def __init__(self, R=10, C=10, n_monsters=8):
+    def __init__(self, R=20, C=20, n_monsters=16):
         self.R = R
         self.C = C
         self.agent = Agent(random.randrange(R), random.randrange(C))
@@ -239,11 +239,11 @@ class Environment:
                     break
 
 if __name__ == "__main__":
-    env = Environment(n_monsters=5)
+    env = Environment()
     while env.agent.alive and env.monsters:
         env.render()
         env.step()
-        time.sleep(0.2)
+        time.sleep(0.02)
     env.render()
     print("\nVictory!" if env.agent.alive else "\nGame Over!")
     print(f"Level: {env.agent.level}, Kills: {env.agent.kills}, Turns: {env.turn}")
