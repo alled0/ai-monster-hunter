@@ -2,7 +2,7 @@ import sys, time, random
 import pygame as pg
 
 try:
-    import monster_hunt as mh  
+    import SimpleBFS as mh  
 except ModuleNotFoundError:
     print("❌  Could not find 'monster_hunt.py' in the same directory.")
     sys.exit(1)
@@ -47,12 +47,12 @@ MONSTER_COLORS = [
     (176, 196, 222),   
 ]
 
-ARROW = {mh.Dir.N: "^", mh.Dir.S: "v", mh.Dir.W: "<", mh.Dir.E: ">"}
+ARROW = {mh.DIRECTION_VECTORS["N"]: "^", mh.DIRECTION_VECTORS["S"]: "v", mh.DIRECTION_VECTORS["W"]: "<", mh.DIRECTION_VECTORS["E"]: ">"}
 
 def new_env():
     """Create a new random environment."""
     seed = int(time.time() * 1000) % 1_000_000
-    return mh.Environment(R=12, C=12, n_monsters=8, seed=seed)
+    return mh.Environment(R=12, C=12, n_monsters=8)
 
 
 def draw_board(screen: pg.Surface, env: mh.Environment, font: pg.font.Font):
@@ -73,7 +73,7 @@ def draw_board(screen: pg.Surface, env: mh.Environment, font: pg.font.Font):
         rect = pg.Rect(mc * CELL + MARGIN, mr * CELL + MARGIN,
                        CELL - 2 * MARGIN, CELL - 2 * MARGIN)
         pg.draw.rect(screen, colour, rect)
-        label = font.render(f"{mon.level}{ARROW[mon.facing]}", True, MON_TXT)
+        label = font.render(f"{mon.level}{mh.DIRECTION_ARROWS[mon.facing]}", True, MON_TXT)
         screen.blit(label, label.get_rect(center=rect.center))
 
     
