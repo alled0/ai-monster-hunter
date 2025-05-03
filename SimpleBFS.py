@@ -2,7 +2,7 @@ import random
 import os
 import time
 
-# Simple direction system instead of Enum
+
 DIRECTIONS = ["N", "S", "W", "E"]
 DIRECTION_VECTORS = {
     "N": (-1, 0),
@@ -28,7 +28,7 @@ class Monster:
     def rotate_if_needed(self):
         self.turns_seen += 1
         if self.turns_seen % 2 == 0:
-            # Rotate clockwise: N -> E -> S -> W -> N
+            
             order = ["N", "E", "S", "W"]
             idx = order.index(self.facing)
             self.facing = order[(idx + 1) % len(order)]
@@ -40,17 +40,22 @@ class Agent:
         self.level = 1
         self.kills = 0
         self.alive = True
-        self.known_monsters = {}  # Dictionary of known monster positions
+        self.known_monsters = {}  
+        self.visited = {(r, c)}          
 
     def perceive(self, env):
-        # Check adjacent cells for monsters
-        for direction in DIRECTIONS:
-            dr, dc = DIRECTION_VECTORS[direction]
-            nr, nc = self.r + dr, self.c + dc
-            if 0 <= nr < env.R and 0 <= nc < env.C:
-                for pos, monster in env.monsters.items():
-                    if pos == (nr, nc):
-                        self.known_monsters[pos] = monster
+        for dr in (-1, 0, 1):
+            for dc in (-1, 0, 1):
+                if dr == dc == 0:                       
+                    continue
+                nr, nc = self.r + dr, self.c + dc
+                if 0 <= nr < env.R and 0 <= nc < env.C:
+                    if (nr, nc) in env.monsters:
+                        self.known_monsters[(nr, nc)] = env.monsters[(nr, nc)]
+
+        self.known_monsters = {
+            pos: m for pos, m in self.known_monsters.items() if pos in env.monsters
+        }
 
     def find_path(self, env, goal_r, goal_c):
         """Simple path finding using BFS"""
@@ -77,63 +82,66 @@ class Agent:
                     visited.add((nr, nc))
                     queue.append(((nr, nc), path + [direction]))
                     
-        return []  # No path found
+        return []  
 
     def plan_action(self, env):
+        
         self.perceive(env)
-        # Clean up known monsters (remove ones that aren't there anymore)
-        new_known = {}
-        for pos, m in self.known_monsters.items():
-            for actual_pos, actual_m in env.monsters.items():
-                if pos == actual_pos:
-                    new_known[pos] = m
-        self.known_monsters = new_known
 
-        # Find reachable monsters
-        targets = []
-        for (mr, mc), monster in env.monsters.items():
-            if monster.level <= self.level:
-                dist = abs(mr - self.r) + abs(mc - self.c)
-                targets.append((dist, monster.level, mr, mc))
         
-        # Sort by distance, then by level (higher level preferred)
-        targets.sort()
-        
-        if not targets:
-            return "WAIT", None
+        edible = [
+            (abs(mr - self.r) + abs(mc - self.c),  
+             m.level,                               
+             mr, mc)                                
+            for (mr, mc), m in self.known_monsters.items()
+            if m.level <= self.level
+        ]
+        edible.sort()                               
+
+        for dist, _, mr, mc in edible:
             
-        for _, _, tr, tc in targets:
-            # If adjacent, attack!
-            if abs(tr - self.r) + abs(tc - self.c) == 1:
-                return "ATTACK", (tr, tc)
-                
-            # Find safe positions around the monster
-            monster = None
-            for pos, m in env.monsters.items():
-                if pos == (tr, tc):
-                    monster = m
-                    break
-                    
-            if monster:
-                # Check positions around monster that aren't in its line of sight
-                safe_positions = []
-                for direction in DIRECTIONS:
-                    dr, dc = DIRECTION_VECTORS[direction]
-                    ar, ac = tr + dr, tc + dc
-                    if (0 <= ar < env.R and 0 <= ac < env.C and
-                        (ar, ac) not in env.get_blocked_positions() and
-                        direction != monster.facing):
-                        safe_positions.append((ar, ac))
-                
-                # Try to find path to each safe position
-                for sr, sc in safe_positions:
-                    path = self.find_path(env, sr, sc)
-                    if path and path[0]:  # If we have a valid path
-                        return "MOVE", path[0]
-                        
+            if dist == 1:
+                return "ATTACK", (mr, mc)
+
+            
+            candidate_targets = []
+            for dr, dc in DIRECTION_VECTORS.values():
+                ar, ac = mr + dr, mc + dc
+                if (
+                    0 <= ar < env.R and 0 <= ac < env.C and
+                    (ar, ac) not in env.get_blocked_positions()
+                ):
+                    candidate_targets.append((ar, ac))
+
+            
+            best_path = None
+            for ar, ac in candidate_targets:
+                path = self.find_path(env, ar, ac)
+                if path and (best_path is None or len(path) < len(best_path)):
+                    best_path = path
+
+            if best_path:                           
+                return "MOVE", best_path[0]
+
+        
+        safe_dirs = []
+        for direction in DIRECTIONS:
+            dr, dc = DIRECTION_VECTORS[direction]
+            nr, nc = self.r + dr, self.c + dc
+            if (
+                0 <= nr < env.R and 0 <= nc < env.C and
+                (nr, nc) not in env.get_blocked_positions() and
+                (nr, nc) not in env.get_dangerous_positions()
+            ):
+                safe_dirs.append(direction)
+
+        if safe_dirs:
+            return "MOVE", random.choice(safe_dirs)
+
         return "WAIT", None
 
     def execute(self, env):
+        self.visited.add((self.r, self.c))
         action, arg = self.plan_action(env)
         
         if action == "MOVE":
@@ -146,7 +154,7 @@ class Agent:
             for pos, monster in env.monsters.items():
                 if pos == (target_r, target_c):
                     target_pos = pos
-                    # If we can defeat the monster
+                    
                     if self.level >= monster.level:
                         self.kills += 1
                         self.level += 1
@@ -164,7 +172,7 @@ class Environment:
         self.agent = Agent(random.randrange(R), random.randrange(C))
         self.monsters = {}
         
-        # Create monsters
+        
         level = 1
         for _ in range(n_monsters):
             while True:
@@ -195,24 +203,24 @@ class Environment:
     def render(self):
         os.system('cls' if os.name == 'nt' else 'clear')
         
-        # Create empty grid
+        
         grid = [[' .' for _ in range(self.C)] for _ in range(self.R)]
         
-        # Add monsters
+        
         for (r, c), monster in self.monsters.items():
             grid[r][c] = f"\033[91m{monster.level}{DIRECTION_ARROWS[monster.facing]}\033[0m"
             
-        # Add agent
+        
         grid[self.agent.r][self.agent.c] = "\033[92m A\033[0m"
         
-        # Print turn info
+        
         print(f"Turn {self.turn} | Level {self.agent.level} | Kills {self.agent.kills}")
         
-        # Print grid
+        
         for row in grid:
             print(" ".join(row))
             
-        # Print known monsters
+        
         self.agent.perceive(self)
         known = []
         for pos, monster in self.agent.known_monsters.items():
@@ -222,14 +230,14 @@ class Environment:
     def step(self):
         self.turn += 1
         
-        # Rotate monsters
+        
         for monster in self.monsters.values():
             monster.rotate_if_needed()
             
-        # Agent takes action
+        
         self.agent.execute(self)
         
-        # Check if agent is in danger
+        
         if self.agent.alive:
             for pos, monster in self.monsters.items():
                 mr, mc = pos

@@ -4,7 +4,7 @@ import pygame as pg
 try:
     import SimpleBFS as mh  
 except ModuleNotFoundError:
-    print("❌  Could not find 'monster_hunt.py' in the same directory.")
+    print("Could not find it in the same directory.")
     sys.exit(1)
 
 
@@ -50,9 +50,8 @@ MONSTER_COLORS = [
 ARROW = {mh.DIRECTION_VECTORS["N"]: "^", mh.DIRECTION_VECTORS["S"]: "v", mh.DIRECTION_VECTORS["W"]: "<", mh.DIRECTION_VECTORS["E"]: ">"}
 
 def new_env():
-    """Create a new random environment."""
     seed = int(time.time() * 1000) % 1_000_000
-    return mh.Environment(R=12, C=12, n_monsters=8)
+    return mh.Environment(R=8, C=8, n_monsters=6)
 
 
 def draw_board(screen: pg.Surface, env: mh.Environment, font: pg.font.Font):
@@ -101,7 +100,7 @@ def draw_board(screen: pg.Surface, env: mh.Environment, font: pg.font.Font):
 
 def main():
     pg.init()
-    pg.display.set_caption("Monster Hunt (Bright Mode)")
+    pg.display.set_caption("Monster Hunt")
     font = pg.font.SysFont("NONE", int(CELL * 0.45))
 
     env = new_env()
@@ -138,7 +137,7 @@ def main():
         game_over = (not env.agent.alive) or (not env.monsters)
 
         if game_over:
-            msg = "🎉 You won!" if env.agent.alive else "☠️  Agent died"
+            msg = "You won!" if env.agent.alive else "Agent died"
             big = pg.font.SysFont(None, int(CELL * 0.7))
             surf = big.render(msg, True, HUD_TEXT)
             screen.blit(surf, surf.get_rect(center=(width // 2, height // 2)))

@@ -1,6 +1,3 @@
-# monster_hunt_optimized.py
-
-# Import standard library modules
 import random
 import os
 import time
@@ -71,22 +68,22 @@ class Agent:
 
     def astar(self, env, goal):
         R, C = env.R, env.C
-        # frontier: priority queue of (f_score, counter, (r, c, path, g_score))
+        
         frontier = []
         counter = 0
         start = (self.r, self.c)
         heapq.heappush(frontier, (0 + self._h(start, goal), counter, (self.r, self.c, [], 0)))
-        # reached[state] = best g_score found so far
+        
         reached = {start: 0}
 
         while frontier:
             f, _, (r, c, path, g) = heapq.heappop(frontier)
 
-            # goal test
+            
             if (r, c) == goal:
                 return path
 
-            # expand
+            
             for direction in Dir.all():
                 dr, dc = direction.vec()
                 nr, nc = r + dr, c + dc
@@ -98,26 +95,26 @@ class Agent:
                 new_g = g + 1
                 prev_g = reached.get((nr, nc), float('inf'))
 
-                # graph-like A*: only add if unseen or found a cheaper path
+                
                 if new_g < prev_g:
                     reached[(nr, nc)] = new_g
                     new_f = new_g + self._h((nr, nc), goal)
                     counter += 1
                     heapq.heappush(frontier, (new_f, counter, (nr, nc, path + [direction], new_g)))
 
-        # failure
+        
         return []
 
     def _h(self, pos, goal):
-        # Manhattan distance heuristic
+        
         return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
 
     def plan_action(self, env):
         debug_print("\n--- PLANNING ACTION ---")
-        # forget monsters that are gone
+        
         self.known_monsters = {k:v for k,v in self.known_monsters.items() if k in env.monsters}
 
-        # gather all monsters we can beat
+        
         viable = []
         for (mr, mc), m in env.monsters.items():
             if m.level <= self.level:
@@ -133,11 +130,11 @@ class Agent:
             if not m:
                 continue
 
-            # if adjacent, attack
+            
             if abs(target[0] - self.r) + abs(target[1] - self.c) == 1:
                 return "ATTACK", target
 
-            # else find safe approach spots
+            
             safe = []
             for d in Dir.all():
                 ar, ac = target[0] + d.vec()[0], target[1] + d.vec()[1]
@@ -146,7 +143,7 @@ class Agent:
                     and d != m.facing):
                     safe.append((ar, ac))
 
-            # try paths to each safe spot
+            
             for spot in safe:
                 path = self.astar(env, spot)
                 if path:
@@ -213,7 +210,7 @@ class Environment:
         for m in self.monsters.values():
             m.rotate_if_needed()
         self.agent.execute(self)
-        # monsters attack
+        
         if self.agent.alive:
             for m in self.monsters.values():
                 dr, dc = m.facing.vec()
