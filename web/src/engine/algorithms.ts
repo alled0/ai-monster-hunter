@@ -169,21 +169,22 @@ function simpleBFSStep(state: GameState, t: Tracer): void {
 
 // ─── Algorithm 2: Basic BFS ───────────────────────────────────────────────────
 
-const basicBFSState = new WeakMap<GameState, { knownFree: Set<string>; knownMonsters: Map<string, any> }>();
+// Persistent across turns within one game run; reset when a new game starts (turn === 1)
+let _basicKnownFree: Set<string> = new Set();
+let _basicKnownMonsters: Map<string, any> = new Map();
 
 function getBasicState(state: GameState) {
-  if (!basicBFSState.has(state)) {
-    basicBFSState.set(state, {
-      knownFree: new Set([key(state.agent.r, state.agent.c)]),
-      knownMonsters: new Map(),
-    });
+  if (state.turn <= 1) {
+    _basicKnownFree = new Set([key(state.agent.r, state.agent.c)]);
+    _basicKnownMonsters = new Map();
   }
-  return basicBFSState.get(state)!;
+  return { knownFree: _basicKnownFree, knownMonsters: _basicKnownMonsters };
 }
 
 function basicBFSStep(state: GameState, t: Tracer): void {
   const { agent, monsters, R, C, dangerTiles: danger } = state;
   const local = getBasicState(state);
+  local.knownFree.add(key(agent.r, agent.c)); // mark current cell as visited
 
   // Perceive 4 cardinal neighbors
   for (const d of DIRS) {
@@ -270,18 +271,31 @@ function basicBFSStep(state: GameState, t: Tracer): void {
       return;
     }
     frontiers.sort((a, b) => (Math.abs(a[0] - agent.r) + Math.abs(a[1] - agent.c)) - (Math.abs(b[0] - agent.r) + Math.abs(b[1] - agent.c)));
-    const [gr, gc] = frontiers[0];
-    t.log(`${frontiers.length} frontier cell(s) — nearest at (${gr},${gc})`, 'info');
-    const path = bfs(agent.r, agent.c, gr, gc, R, C, blocked, danger);
-    if (path.length) {
-      const [nr, nc] = [agent.r + VEC[path[0]][0], agent.c + VEC[path[0]][1]];
-      if (!danger.has(key(nr, nc))) {
-        t.log(`BFS path to frontier — moving ${path[0]}`, 'action');
+    t.log(`${frontiers.length} frontier cell(s) — nearest at (${frontiers[0][0]},${frontiers[0][1]})`, 'info');
+
+    // Try each frontier in order until one yields a usable path (avoiding danger)
+    for (const [gr, gc] of frontiers) {
+      if (gr === agent.r && gc === agent.c) continue; // already here, skip
+      const path = bfs(agent.r, agent.c, gr, gc, R, C, blocked, danger);
+      if (path.length) {
+        t.log(`BFS path to frontier (${gr},${gc}) — moving ${path[0]}`, 'action');
         executeAction(state, 'MOVE', path[0]);
         return;
       }
     }
-    t.log(`Frontier unreachable or blocked by danger — WAIT`, 'warn');
+
+    // All danger-avoiding paths blocked — try ignoring danger to avoid permanent stall
+    for (const [gr, gc] of frontiers) {
+      if (gr === agent.r && gc === agent.c) continue;
+      const path = bfs(agent.r, agent.c, gr, gc, R, C, blocked, new Set());
+      if (path.length) {
+        t.log(`Danger blocks all paths — risking move ${path[0]} toward (${gr},${gc})`, 'warn');
+        executeAction(state, 'MOVE', path[0]);
+        return;
+      }
+    }
+
+    t.log(`Completely surrounded — WAIT`, 'warn');
     executeAction(state, 'WAIT', null);
   });
 }

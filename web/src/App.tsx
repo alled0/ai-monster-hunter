@@ -35,6 +35,9 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [history, setHistory] = useState<Array<{ turn: number; kills: number; level: number }>>([]);
   const [trace, setTrace] = useState<TraceNode | null>(null);
+  const [trail, setTrail] = useState<string[]>([]); // ordered oldest→newest, capped at TRAIL_MAX
+
+  const TRAIL_MAX = 200;
 
   const stateRef = useRef(state);
   const algoRef = useRef(algo);
@@ -47,6 +50,7 @@ export default function App() {
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
     setHistory([]);
     setTrace(null);
+    setTrail([]);
     setPaused(false);
   }, []);
 
@@ -56,6 +60,10 @@ export default function App() {
     const traceRoot = stepGame(s, algoRef.current);
     setHistory(h => [...h, { turn: s.turn, kills: s.agent.kills, level: s.agent.level }]);
     setTrace(traceRoot);
+    setTrail(prev => {
+      const next = [...prev, key(s.agent.r, s.agent.c)];
+      return next.length > TRAIL_MAX ? next.slice(next.length - TRAIL_MAX) : next;
+    });
     setState(s);
   }, []);
 
@@ -71,11 +79,19 @@ export default function App() {
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
     setHistory([]);
     setTrace(null);
+    setTrail([]);
     setPaused(false);
   };
 
   const algoMeta = ALGORITHMS.find(a => a.id === algo)!;
   const { agent, monsters, dangerTiles: danger, turn, done, won } = state;
+
+  // Build trail lookup: cell key → opacity (0.08 oldest … 0.55 newest)
+  const trailMap = new Map<string, number>();
+  trail.forEach((k, i) => {
+    const t = (i + 1) / trail.length; // 0..1, 1 = newest
+    trailMap.set(k, 0.15 + t * 0.55);
+  });
 
   return (
     <div className="app">
@@ -137,8 +153,12 @@ export default function App() {
                 const isAgent = agent.r === r && agent.c === c;
                 const monster = monsters.get(k);
                 const isDanger = danger.has(k) && !monster && !isAgent;
+                const trailOpacity = !isAgent && !monster ? trailMap.get(k) : undefined;
                 return (
                   <div key={k} className={`cell ${isDanger ? 'danger' : ''}`}>
+                    {trailOpacity !== undefined && (
+                      <div className="cell-trail" style={{ opacity: trailOpacity }} />
+                    )}
                     {isAgent && (
                       <div className="cell-agent">
                         <span className="cell-icon">A</span>
