@@ -3,7 +3,7 @@ import { type GameState, type AlgorithmId, type TraceNode, ALGORITHMS, ARROW, ke
 import { createEnvironment } from './engine/environment';
 import { stepGame } from './engine/algorithms';
 import Benchmark from './Benchmark';
-import TraceTree from './TraceTree';
+import TreeViz from './TreeViz';
 import './App.css';
 
 const ROWS = 10, COLS = 10, N_MONSTERS = 8;
@@ -252,9 +252,9 @@ export default function App() {
           </div>
 
           {trace && (
-            <div className="card">
+            <div className="card tree-card">
               <h3 className="card-title">Decision Tree</h3>
-              <TraceTree node={trace} />
+              <TreeViz node={trace} />
             </div>
           )}
         </div>
