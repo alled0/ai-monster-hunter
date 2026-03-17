@@ -41,6 +41,12 @@ export interface GameState {
 
 export type AlgorithmId = 'SimpleBFS' | 'BasicBFS' | 'AStar' | 'AStarManhattan';
 
+export interface TraceNode {
+  label: string;
+  type: 'info' | 'success' | 'warn' | 'action';
+  children: TraceNode[];
+}
+
 export interface AlgorithmMeta {
   id: AlgorithmId;
   name: string;

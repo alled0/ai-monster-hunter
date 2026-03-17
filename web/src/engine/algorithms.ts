@@ -1,7 +1,34 @@
-import { type GameState, type Direction, type AlgorithmId, DIRS, VEC, key, dangerTiles } from './types';
+import { type GameState, type Direction, type AlgorithmId, type TraceNode, DIRS, VEC, key, dangerTiles } from './types';
 import { stepMonsters, checkMonsterAttack, executeAction, finishStep } from './environment';
 
-// ─── BFS helpers ────────────────────────────────────────────────────────────
+// ─── Tracer ──────────────────────────────────────────────────────────────────
+
+class Tracer {
+  root: TraceNode;
+  private stack: TraceNode[];
+
+  constructor(label: string) {
+    this.root = { label, type: 'info', children: [] };
+    this.stack = [this.root];
+  }
+
+  log(label: string, type: TraceNode['type'] = 'info'): TraceNode {
+    const node: TraceNode = { label, type, children: [] };
+    this.stack[this.stack.length - 1].children.push(node);
+    return node;
+  }
+
+  scope<T>(label: string, type: TraceNode['type'], fn: () => T): T {
+    const node: TraceNode = { label, type, children: [] };
+    this.stack[this.stack.length - 1].children.push(node);
+    this.stack.push(node);
+    const result = fn();
+    this.stack.pop();
+    return result;
+  }
+}
+
+// ─── BFS helper ──────────────────────────────────────────────────────────────
 
 function bfs(
   sr: number, sc: number,
@@ -29,7 +56,7 @@ function bfs(
   return [];
 }
 
-// ─── A* helper ──────────────────────────────────────────────────────────────
+// ─── A* helper ───────────────────────────────────────────────────────────────
 
 function astar(
   sr: number, sc: number,
@@ -69,10 +96,9 @@ function astar(
   return [];
 }
 
-// ─── Algorithm 1: SimpleBFS ─────────────────────────────────────────────────
-// 8-neighbor perception, random fallback, full-grid-knowledge BFS
+// ─── Algorithm 1: Simple BFS ─────────────────────────────────────────────────
 
-function simpleBFSStep(state: GameState): void {
+function simpleBFSStep(state: GameState, t: Tracer): void {
   const { agent, monsters, R, C, dangerTiles: danger } = state;
   const blocked = new Set(monsters.keys());
 
@@ -86,44 +112,62 @@ function simpleBFSStep(state: GameState): void {
     }
   }
 
-  // Find edible targets (level ≤ agent level)
   const edible = [...known.entries()]
     .filter(([, m]) => m.level <= agent.level)
-    .map(([k, m]) => ({
-      k, m,
-      dist: Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c)
-    }))
+    .map(([k, m]) => ({ k, m, dist: Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c) }))
     .sort((a, b) => a.dist - b.dist);
 
-  for (const { k, m, dist } of edible) {
-    if (dist === 1) { executeAction(state, 'ATTACK', k); return; }
-    // Try adjacent cells around monster
-    for (const d of DIRS) {
+  const tooStrong = [...known.entries()].filter(([, m]) => m.level > agent.level);
+
+  t.scope(`Perception — 8-direction scan`, 'info', () => {
+    t.log(`Scanned ${known.size} adjacent monster(s)`, 'info');
+    edible.forEach(({ m }) => t.log(`Lv${m.level} at (${m.r},${m.c}) — beatable`, 'success'));
+    tooStrong.forEach(([, m]) => t.log(`Lv${m.level} at (${m.r},${m.c}) — too strong, skipping`, 'warn'));
+  });
+
+  if (edible.length === 0) {
+    const safeDirs = DIRS.filter(d => {
       const [dr, dc] = VEC[d];
-      const ar = m.r + dr, ac = m.c + dc;
-      if (ar < 0 || ar >= R || ac < 0 || ac >= C) continue;
-      const path = bfs(agent.r, agent.c, ar, ac, R, C, blocked, danger);
-      if (path.length) { executeAction(state, 'MOVE', path[0]); return; }
+      const nr = agent.r + dr, nc = agent.c + dc;
+      const k = key(nr, nc);
+      return nr >= 0 && nr < R && nc >= 0 && nc < C && !blocked.has(k) && !danger.has(k);
+    });
+    if (safeDirs.length) {
+      const d = safeDirs[Math.floor(Math.random() * safeDirs.length)];
+      t.log(`No targets visible — random safe move: ${d}`, 'warn');
+      executeAction(state, 'MOVE', d);
+    } else {
+      t.log(`No targets, no safe moves — WAIT`, 'warn');
+      executeAction(state, 'WAIT', null);
     }
+    return;
   }
 
-  // Random safe move fallback
-  const safeDirs = DIRS.filter(d => {
-    const [dr, dc] = VEC[d];
-    const nr = agent.r + dr, nc = agent.c + dc;
-    const k = key(nr, nc);
-    return nr >= 0 && nr < R && nc >= 0 && nc < C && !blocked.has(k) && !danger.has(k);
-  });
-  if (safeDirs.length) {
-    const d = safeDirs[Math.floor(Math.random() * safeDirs.length)];
-    executeAction(state, 'MOVE', d);
-  } else {
-    executeAction(state, 'WAIT', null);
+  for (const { k, m, dist } of edible) {
+    t.scope(`Targeting Lv${m.level} at (${m.r},${m.c}), dist=${dist}`, 'info', () => {
+      if (dist === 1) {
+        t.log(`Adjacent — attacking now`, 'action');
+        executeAction(state, 'ATTACK', k);
+        return;
+      }
+      for (const d of DIRS) {
+        const [dr, dc] = VEC[d];
+        const ar = m.r + dr, ac = m.c + dc;
+        if (ar < 0 || ar >= R || ac < 0 || ac >= C) continue;
+        const path = bfs(agent.r, agent.c, ar, ac, R, C, blocked, danger);
+        if (path.length) {
+          t.log(`BFS path found — moving ${path[0]} (${path.length} steps)`, 'action');
+          executeAction(state, 'MOVE', path[0]);
+          return;
+        }
+      }
+      t.log(`No path to (${m.r},${m.c}) — trying next target`, 'warn');
+    });
+    if (!state.agent.alive || state.monsters.size < monsters.size) return;
   }
 }
 
-// ─── Algorithm 2: BasicBFS ──────────────────────────────────────────────────
-// 4-neighbor perception only, frontier exploration, waits if next step dangerous
+// ─── Algorithm 2: Basic BFS ───────────────────────────────────────────────────
 
 const basicBFSState = new WeakMap<GameState, { knownFree: Set<string>; knownMonsters: Map<string, any> }>();
 
@@ -137,11 +181,11 @@ function getBasicState(state: GameState) {
   return basicBFSState.get(state)!;
 }
 
-function basicBFSStep(state: GameState): void {
+function basicBFSStep(state: GameState, t: Tracer): void {
   const { agent, monsters, R, C, dangerTiles: danger } = state;
   const local = getBasicState(state);
 
-  // Perceive 4 neighbors
+  // Perceive 4 cardinal neighbors
   for (const d of DIRS) {
     const [dr, dc] = VEC[d];
     const nr = agent.r + dr, nc = agent.c + dc;
@@ -150,12 +194,16 @@ function basicBFSStep(state: GameState): void {
     if (monsters.has(k)) local.knownMonsters.set(k, monsters.get(k));
     else { local.knownFree.add(k); local.knownMonsters.delete(k); }
   }
-  // Prune dead monsters
   for (const k of [...local.knownMonsters.keys()]) {
     if (!monsters.has(k)) local.knownMonsters.delete(k);
   }
 
   const blocked = new Set(local.knownMonsters.keys());
+
+  t.scope(`Perception — 4-direction scan`, 'info', () => {
+    t.log(`Known free cells: ${local.knownFree.size}`, 'info');
+    t.log(`Known monsters in memory: ${local.knownMonsters.size}`, 'info');
+  });
 
   if (local.knownMonsters.size > 0) {
     const choices = [...local.knownMonsters.entries()]
@@ -163,22 +211,42 @@ function basicBFSStep(state: GameState): void {
       .map(([k, m]) => ({ k, m, dist: Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c) }))
       .sort((a, b) => a.dist - b.dist);
 
+    if (choices.length === 0) {
+      t.log(`Known monsters all too strong (agent Lv${agent.level}) — will explore`, 'warn');
+    }
+
     for (const { k, m } of choices) {
       const [mr, mc] = [m.r, m.c];
-      if (Math.abs(mr - agent.r) + Math.abs(mc - agent.c) === 1) {
-        executeAction(state, 'ATTACK', k); return;
-      }
-      for (const d of DIRS) {
-        const [dr, dc] = VEC[d];
-        const ar = mr + dr, ac = mc + dc;
-        if (!local.knownFree.has(key(ar, ac))) continue;
-        const path = bfs(agent.r, agent.c, ar, ac, R, C, blocked, danger);
-        if (path.length) {
-          const [nr, nc] = [agent.r + VEC[path[0]][0], agent.c + VEC[path[0]][1]];
-          if (danger.has(key(nr, nc))) { executeAction(state, 'WAIT', null); return; }
-          executeAction(state, 'MOVE', path[0]); return;
+      let acted = false;
+      t.scope(`Target Lv${m.level} at (${mr},${mc})`, 'info', () => {
+        if (Math.abs(mr - agent.r) + Math.abs(mc - agent.c) === 1) {
+          t.log(`Adjacent — attacking`, 'action');
+          executeAction(state, 'ATTACK', k);
+          acted = true;
+          return;
         }
-      }
+        for (const d of DIRS) {
+          const [dr, dc] = VEC[d];
+          const ar = mr + dr, ac = mc + dc;
+          if (!local.knownFree.has(key(ar, ac))) continue;
+          const path = bfs(agent.r, agent.c, ar, ac, R, C, blocked, danger);
+          if (path.length) {
+            const [nr, nc] = [agent.r + VEC[path[0]][0], agent.c + VEC[path[0]][1]];
+            if (danger.has(key(nr, nc))) {
+              t.log(`Path found but next cell is a danger zone — WAIT`, 'warn');
+              executeAction(state, 'WAIT', null);
+              acted = true;
+              return;
+            }
+            t.log(`BFS path found — moving ${path[0]} (${path.length} steps)`, 'action');
+            executeAction(state, 'MOVE', path[0]);
+            acted = true;
+            return;
+          }
+        }
+        t.log(`No path to (${mr},${mc}) via known cells`, 'warn');
+      });
+      if (acted) return;
     }
   }
 
@@ -194,63 +262,89 @@ function basicBFSStep(state: GameState): void {
       }
     }
   }
-  if (frontiers.length) {
+
+  t.scope(`Frontier exploration`, 'info', () => {
+    if (!frontiers.length) {
+      t.log(`No frontier cells found — WAIT`, 'warn');
+      executeAction(state, 'WAIT', null);
+      return;
+    }
     frontiers.sort((a, b) => (Math.abs(a[0] - agent.r) + Math.abs(a[1] - agent.c)) - (Math.abs(b[0] - agent.r) + Math.abs(b[1] - agent.c)));
     const [gr, gc] = frontiers[0];
+    t.log(`${frontiers.length} frontier cell(s) — nearest at (${gr},${gc})`, 'info');
     const path = bfs(agent.r, agent.c, gr, gc, R, C, blocked, danger);
     if (path.length) {
       const [nr, nc] = [agent.r + VEC[path[0]][0], agent.c + VEC[path[0]][1]];
-      if (!danger.has(key(nr, nc))) { executeAction(state, 'MOVE', path[0]); return; }
+      if (!danger.has(key(nr, nc))) {
+        t.log(`BFS path to frontier — moving ${path[0]}`, 'action');
+        executeAction(state, 'MOVE', path[0]);
+        return;
+      }
     }
-  }
-  executeAction(state, 'WAIT', null);
+    t.log(`Frontier unreachable or blocked by danger — WAIT`, 'warn');
+    executeAction(state, 'WAIT', null);
+  });
 }
 
-// ─── Algorithm 3: A* Pure ───────────────────────────────────────────────────
-// Full knowledge, A* pathfinding, approach from safe (non-facing) side
+// ─── Algorithm 3: A* Pure ────────────────────────────────────────────────────
 
-function astarStep(state: GameState): void {
+function astarStep(state: GameState, t: Tracer): void {
   const { agent, monsters, R, C, dangerTiles: danger } = state;
   const blocked = new Set(monsters.keys());
-
-  // Perceive 4 neighbors
-  const knownMonsters = new Map<string, any>();
-  for (const d of DIRS) {
-    const [dr, dc] = VEC[d];
-    const k = key(agent.r + dr, agent.c + dc);
-    if (monsters.has(k)) knownMonsters.set(k, monsters.get(k));
-  }
 
   const targets = [...monsters.entries()]
     .filter(([, m]) => m.level <= agent.level)
     .map(([k, m]) => ({ k, m, dist: Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c) }))
     .sort((a, b) => a.dist - b.dist || b.m.level - a.m.level);
 
-  if (!targets.length) { executeAction(state, 'WAIT', null); return; }
+  t.scope(`Perception — 4-direction scan`, 'info', () => {
+    t.log(`Total monsters on grid: ${monsters.size}`, 'info');
+    t.log(`Beatable targets (Lv ≤ ${agent.level}): ${targets.length}`, targets.length > 0 ? 'success' : 'warn');
+  });
+
+  if (!targets.length) {
+    t.log(`No beatable targets — WAIT`, 'warn');
+    executeAction(state, 'WAIT', null);
+    return;
+  }
 
   for (const { k, m } of targets) {
-    if (Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c) === 1) {
-      executeAction(state, 'ATTACK', k); return;
-    }
-    // Approach from non-facing side
-    const safe: Array<[number, number]> = [];
-    for (const d of DIRS) {
-      const [dr, dc] = VEC[d];
-      const ar = m.r + dr, ac = m.c + dc;
-      if (ar >= 0 && ar < R && ac >= 0 && ac < C && !blocked.has(key(ar, ac)) && d !== m.facing) {
-        safe.push([ar, ac]);
+    let acted = false;
+    t.scope(`Target Lv${m.level} at (${m.r},${m.c}), dist=${Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c)}`, 'info', () => {
+      if (Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c) === 1) {
+        t.log(`Adjacent — attacking`, 'action');
+        executeAction(state, 'ATTACK', k);
+        acted = true;
+        return;
       }
-    }
-    for (const [ar, ac] of safe) {
-      const path = astar(agent.r, agent.c, ar, ac, R, C, blocked, danger);
-      if (path.length) { executeAction(state, 'MOVE', path[0]); return; }
-    }
+      const safe: Array<[number, number]> = [];
+      for (const d of DIRS) {
+        const [dr, dc] = VEC[d];
+        const ar = m.r + dr, ac = m.c + dc;
+        if (ar >= 0 && ar < R && ac >= 0 && ac < C && !blocked.has(key(ar, ac)) && d !== m.facing) {
+          safe.push([ar, ac]);
+        }
+      }
+      t.log(`Approach candidates (non-facing sides): ${safe.length}`, 'info');
+      for (const [ar, ac] of safe) {
+        const path = astar(agent.r, agent.c, ar, ac, R, C, blocked, danger);
+        if (path.length) {
+          t.log(`A* path to (${ar},${ac}) — moving ${path[0]} (${path.length} steps), h=${Math.abs(agent.r - ar) + Math.abs(agent.c - ac)}`, 'action');
+          executeAction(state, 'MOVE', path[0]);
+          acted = true;
+          return;
+        }
+      }
+      t.log(`No A* path found to any safe approach cell`, 'warn');
+    });
+    if (acted) return;
   }
+
+  t.log(`All targets unreachable — WAIT`, 'warn');
   executeAction(state, 'WAIT', null);
 }
 
-// ─── Algorithm 4: A* + Manhattan Explore ───────────────────────────────────
-// A* + frontier exploration with partial knowledge
+// ─── Algorithm 4: A* + Manhattan Explore ─────────────────────────────────────
 
 const astarManhattanState = new WeakMap<GameState, { knownFree: Set<string>; knownMonsters: Map<string, any> }>();
 
@@ -264,11 +358,11 @@ function getAMState(state: GameState) {
   return astarManhattanState.get(state)!;
 }
 
-function astarManhattanStep(state: GameState): void {
+function astarManhattanStep(state: GameState, t: Tracer): void {
   const { agent, monsters, R, C, dangerTiles: danger } = state;
   const local = getAMState(state);
 
-  // Perceive 4 neighbors
+  // Perceive 4 cardinal neighbors
   for (const d of DIRS) {
     const [dr, dc] = VEC[d];
     const nr = agent.r + dr, nc = agent.c + dc;
@@ -282,27 +376,51 @@ function astarManhattanStep(state: GameState): void {
   }
 
   const blocked = new Set(local.knownMonsters.keys());
+
+  t.scope(`Perception — 4-direction scan`, 'info', () => {
+    t.log(`Known free cells: ${local.knownFree.size}`, 'info');
+    t.log(`Known monsters: ${local.knownMonsters.size}`, 'info');
+  });
+
   const viable = [...monsters.entries()]
     .filter(([, m]) => m.level <= agent.level)
     .map(([k, m]) => ({ k, m, dist: Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c) }))
     .sort((a, b) => a.dist - b.dist || b.m.level - a.m.level);
 
+  if (viable.length > 0) {
+    t.log(`Beatable targets (Lv ≤ ${agent.level}): ${viable.length}`, 'success');
+  }
+
   for (const { k, m } of viable) {
-    if (Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c) === 1) {
-      executeAction(state, 'ATTACK', k); return;
-    }
-    const safe: Array<[number, number]> = [];
-    for (const d of DIRS) {
-      const [dr, dc] = VEC[d];
-      const ar = m.r + dr, ac = m.c + dc;
-      if (ar >= 0 && ar < R && ac >= 0 && ac < C && !blocked.has(key(ar, ac)) && d !== m.facing) {
-        safe.push([ar, ac]);
+    let acted = false;
+    t.scope(`Target Lv${m.level} at (${m.r},${m.c})`, 'info', () => {
+      if (Math.abs(m.r - agent.r) + Math.abs(m.c - agent.c) === 1) {
+        t.log(`Adjacent — attacking`, 'action');
+        executeAction(state, 'ATTACK', k);
+        acted = true;
+        return;
       }
-    }
-    for (const [ar, ac] of safe) {
-      const path = astar(agent.r, agent.c, ar, ac, R, C, blocked, danger);
-      if (path.length) { executeAction(state, 'MOVE', path[0]); return; }
-    }
+      const safe: Array<[number, number]> = [];
+      for (const d of DIRS) {
+        const [dr, dc] = VEC[d];
+        const ar = m.r + dr, ac = m.c + dc;
+        if (ar >= 0 && ar < R && ac >= 0 && ac < C && !blocked.has(key(ar, ac)) && d !== m.facing) {
+          safe.push([ar, ac]);
+        }
+      }
+      t.log(`Safe approach sides: ${safe.length} (avoiding monster facing direction)`, 'info');
+      for (const [ar, ac] of safe) {
+        const path = astar(agent.r, agent.c, ar, ac, R, C, blocked, danger);
+        if (path.length) {
+          t.log(`A* path to (${ar},${ac}) — moving ${path[0]} (${path.length} steps)`, 'action');
+          executeAction(state, 'MOVE', path[0]);
+          acted = true;
+          return;
+        }
+      }
+      t.log(`No A* path to any approach cell`, 'warn');
+    });
+    if (acted) return;
   }
 
   // Frontier exploration
@@ -317,31 +435,46 @@ function astarManhattanStep(state: GameState): void {
       }
     }
   }
-  if (frontiers.length) {
+
+  t.scope(`Frontier exploration`, 'info', () => {
+    if (!frontiers.length) {
+      t.log(`No frontier cells — WAIT`, 'warn');
+      executeAction(state, 'WAIT', null);
+      return;
+    }
     frontiers.sort((a, b) => (Math.abs(a[0] - agent.r) + Math.abs(a[1] - agent.c)) - (Math.abs(b[0] - agent.r) + Math.abs(b[1] - agent.c)));
     const [gr, gc] = frontiers[0];
+    t.log(`${frontiers.length} frontier cell(s) — nearest (${gr},${gc}), Manhattan dist=${Math.abs(gr - agent.r) + Math.abs(gc - agent.c)}`, 'info');
     const path = astar(agent.r, agent.c, gr, gc, R, C, blocked, danger);
-    if (path.length) { executeAction(state, 'MOVE', path[0]); return; }
-  }
-  executeAction(state, 'WAIT', null);
+    if (path.length) {
+      t.log(`A* path to frontier — moving ${path[0]} (${path.length} steps)`, 'action');
+      executeAction(state, 'MOVE', path[0]);
+      return;
+    }
+    t.log(`Frontier unreachable — WAIT`, 'warn');
+    executeAction(state, 'WAIT', null);
+  });
 }
 
-// ─── Public step function ───────────────────────────────────────────────────
+// ─── Public step function ─────────────────────────────────────────────────────
 
-export function stepGame(state: GameState, algorithmId: AlgorithmId): void {
-  if (state.done) return;
+export function stepGame(state: GameState, algorithmId: AlgorithmId): TraceNode {
+  if (state.done) return { label: 'Simulation finished', type: 'warn', children: [] };
+
   state.turn++;
   stepMonsters(state);
-  // Refresh danger tiles AFTER monster rotation so agent plans with current zones
   state.dangerTiles = dangerTiles(state.monsters, state.R, state.C);
 
+  const t = new Tracer(`Turn ${state.turn} — ${algorithmId}`);
+
   switch (algorithmId) {
-    case 'SimpleBFS': simpleBFSStep(state); break;
-    case 'BasicBFS': basicBFSStep(state); break;
-    case 'AStar': astarStep(state); break;
-    case 'AStarManhattan': astarManhattanStep(state); break;
+    case 'SimpleBFS':       simpleBFSStep(state, t);       break;
+    case 'BasicBFS':        basicBFSStep(state, t);         break;
+    case 'AStar':           astarStep(state, t);            break;
+    case 'AStarManhattan':  astarManhattanStep(state, t);   break;
   }
 
   if (state.agent.alive) checkMonsterAttack(state);
   finishStep(state);
+  return t.root;
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type GameState, type AlgorithmId, ALGORITHMS, ARROW, key } from './engine/types';
+import { type GameState, type AlgorithmId, type TraceNode, ALGORITHMS, ARROW, key } from './engine/types';
 import { createEnvironment } from './engine/environment';
 import { stepGame } from './engine/algorithms';
 import Benchmark from './Benchmark';
+import TraceTree from './TraceTree';
 import './App.css';
 
 const ROWS = 10, COLS = 10, N_MONSTERS = 8;
@@ -33,6 +34,7 @@ export default function App() {
   const [speed, setSpeed] = useState(300);
   const [paused, setPaused] = useState(false);
   const [history, setHistory] = useState<Array<{ turn: number; kills: number; level: number }>>([]);
+  const [trace, setTrace] = useState<TraceNode | null>(null);
 
   const stateRef = useRef(state);
   const algoRef = useRef(algo);
@@ -44,14 +46,16 @@ export default function App() {
   const reset = useCallback(() => {
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
     setHistory([]);
+    setTrace(null);
     setPaused(false);
   }, []);
 
   const step = useCallback(() => {
     const s = cloneState(stateRef.current);
     if (s.done) return;
-    stepGame(s, algoRef.current);
+    const traceRoot = stepGame(s, algoRef.current);
     setHistory(h => [...h, { turn: s.turn, kills: s.agent.kills, level: s.agent.level }]);
+    setTrace(traceRoot);
     setState(s);
   }, []);
 
@@ -66,6 +70,7 @@ export default function App() {
     algoRef.current = id;
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
     setHistory([]);
+    setTrace(null);
     setPaused(false);
   };
 
@@ -245,6 +250,13 @@ export default function App() {
               ))}
             </div>
           </div>
+
+          {trace && (
+            <div className="card">
+              <h3 className="card-title">Decision Tree</h3>
+              <TraceTree node={trace} />
+            </div>
+          )}
         </div>
       </div>
 
