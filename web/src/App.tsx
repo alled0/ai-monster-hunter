@@ -251,14 +251,17 @@ export default function App() {
             </div>
           </div>
 
-          {trace && (
-            <div className="card tree-card">
-              <h3 className="card-title">Decision Tree</h3>
-              <TreeViz node={trace} />
-            </div>
-          )}
         </div>
       </div>
+
+      {trace && (
+        <div className="tree-section">
+          <div className="card tree-card">
+            <h3 className="card-title">Decision Tree — last turn</h3>
+            <TreeViz node={trace} />
+          </div>
+        </div>
+      )}
 
       <footer className="footer">
         <p>Monster Hunter — SimpleBFS · BasicBFS · A* · A* + Manhattan</p>

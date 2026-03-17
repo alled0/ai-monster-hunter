@@ -2,11 +2,11 @@ import { memo, useState, useCallback } from 'react';
 import type { TraceNode } from './engine/types';
 
 // ── Layout constants ──────────────────────────────────────────────
-const NW = 172;   // node width
-const NH = 34;    // node height
-const HG = 16;    // horizontal gap between siblings
-const VG = 72;    // vertical gap between levels
-const PAD = 16;   // canvas padding
+const NW = 200;   // node width
+const NH = 36;    // node height
+const HG = 24;    // horizontal gap between siblings
+const VG = 80;    // vertical gap between levels
+const PAD = 24;   // canvas padding
 
 // ── Node colour theme ─────────────────────────────────────────────
 const THEME: Record<TraceNode['type'], { bg: string; border: string; text: string; glow: string }> = {

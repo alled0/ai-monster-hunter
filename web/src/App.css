@@ -399,17 +399,22 @@
 }
 
 /* ── Decision Tree ───────────────────────────────────────────────── */
-.tree-card { padding: 14px 10px; }
+.tree-section {
+  width: 100%;
+  max-width: 900px;
+}
+
+.tree-card { padding: 14px 12px; }
 
 .treeviz-wrap {
   overflow: auto;
-  max-height: 380px;
+  max-height: 460px;
   scrollbar-width: thin;
-  scrollbar-color: #1e293b transparent;
-  border-radius: 6px;
-  background: #080d15;
-  border: 1px solid #0f172a;
-  padding: 4px;
+  scrollbar-color: #1e3a5f transparent;
+  border-radius: 8px;
+  background: #060b14;
+  border: 1px solid #0f1f35;
+  padding: 8px;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────── */
