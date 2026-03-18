@@ -428,7 +428,7 @@
   max-width: 900px;
 }
 
-.tree-card { padding: 14px 12px; }
+.tree-card { padding: 14px 12px; overflow: hidden; }
 
 .treeviz-wrap {
   overflow: auto;
