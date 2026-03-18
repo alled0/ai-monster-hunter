@@ -225,6 +225,67 @@
 .overlay.won  { background: rgba(16, 185, 129, 0.15); border: 2px solid #10b98155; }
 .overlay.lost { background: rgba(239, 68, 68, 0.15);  border: 2px solid #ef444455; }
 
+/* ── Start overlay ───────────────────────────────────────────────── */
+.start-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  background: rgba(6, 10, 20, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.start-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.start-algo-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+.start-game-btn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 44px;
+  border-radius: 50px;
+  border: 2px solid #10b981;
+  background: transparent;
+  color: #10b981;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: inherit;
+  box-shadow: 0 0 28px #10b98133, inset 0 0 20px #10b98111;
+  transition: background 0.2s, box-shadow 0.2s, transform 0.15s;
+}
+.start-game-btn:hover {
+  background: #10b98118;
+  box-shadow: 0 0 48px #10b98155, inset 0 0 28px #10b98120;
+  transform: scale(1.04);
+}
+.start-btn-icon {
+  font-size: 1.1rem;
+}
+
+.start-hint {
+  font-size: 0.62rem;
+  color: #2d4460;
+  letter-spacing: 0.5px;
+}
+
 .overlay-content {
   display: flex;
   flex-direction: column;
@@ -466,6 +527,7 @@
 
 /* ── Footer ─────────────────────────────────────────────────────── */
 .footer {
+  margin-top: auto;
   font-size: 0.72rem;
   color: #334155;
   text-align: center;
@@ -546,6 +608,20 @@
   height: 480px;
   scrollbar-width: thin;
   scrollbar-color: #1a3050 transparent;
+}
+
+.treeviz-empty {
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.treeviz-placeholder {
+  font-size: 0.72rem;
+  color: #1e3050;
+  letter-spacing: 0.5px;
+  font-style: italic;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────── */

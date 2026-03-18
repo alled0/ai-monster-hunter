@@ -181,6 +181,19 @@ export default function App() {
 
       <div className="main-layout">
         <div className="grid-wrapper">
+          {turn === 0 && paused && !done && (
+            <div className="start-overlay">
+              <div className="start-overlay-content">
+                <p className="start-algo-name">{algoMeta.name}</p>
+                <button className="start-game-btn" onClick={() => setPaused(false)}>
+                  <span className="start-btn-icon">▶</span>
+                  <span>START</span>
+                </button>
+                <p className="start-hint">Step through manually or let it run</p>
+              </div>
+            </div>
+          )}
+
           {done && (
             <div className={`overlay ${won ? 'won' : 'lost'}`}>
               <div className="overlay-content">
@@ -261,7 +274,7 @@ export default function App() {
             <h3 className="card-title">Controls</h3>
             <div className="ctrl-row">
               <button className="ctrl-btn primary" onClick={() => setPaused(p => !p)} disabled={done}>
-                {turn === 0 ? 'Start' : paused ? 'Play' : 'Pause'}
+                {paused ? 'Play' : 'Pause'}
               </button>
               <button className="ctrl-btn" onClick={step} disabled={done || !paused}>
                 Step
@@ -308,27 +321,31 @@ export default function App() {
         </div>
       </div>
 
-      {combinedTree && (
-        <div className="tree-section">
-          <div className="card tree-card">
-            <div className="tree-card-header">
-              <h3 className="card-title" style={{ marginBottom: 0 }}>Decision Tree</h3>
-              <div className="turn-legend">
-                <span className="turn-legend-item explore">Explore</span>
-                <span className="turn-legend-item revisit">Revisit</span>
-                <span className="turn-legend-item kill">Kill</span>
-                <span className="turn-legend-item death">Death</span>
-              </div>
+      <div className="tree-section">
+        <div className="card tree-card">
+          <div className="tree-card-header">
+            <h3 className="card-title" style={{ marginBottom: 0 }}>Decision Tree</h3>
+            <div className="turn-legend">
+              <span className="turn-legend-item explore">Explore</span>
+              <span className="turn-legend-item revisit">Revisit</span>
+              <span className="turn-legend-item kill">Kill</span>
+              <span className="turn-legend-item death">Death</span>
             </div>
+          </div>
+          {combinedTree ? (
             <TreeViz
               node={combinedTree}
               nodeCount={treeNodeCount}
               maxNodes={TREE_MAX}
               onReset={() => setTreeStartIdx(turnHistory.length)}
             />
-          </div>
+          ) : (
+            <div className="treeviz-canvas treeviz-empty">
+              <p className="treeviz-placeholder">Tree builds as the simulation runs…</p>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <footer className="footer">
         <p>Monster Hunter — SimpleBFS · BasicBFS · A* · A* + Manhattan</p>
