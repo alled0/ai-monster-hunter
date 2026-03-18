@@ -1,11 +1,11 @@
-import { memo, useState, useCallback } from 'react';
+import { memo } from 'react';
 import type { TraceNode } from './engine/types';
 
 // ── Layout constants ──────────────────────────────────────────────
-const NW  = 200;  // node width
+const NW  = 180;  // node width
 const NH  = 36;   // node height
-const HG  = 24;   // horizontal gap between siblings
-const VG  = 80;   // vertical gap between levels
+const HG  = 20;   // horizontal gap between siblings
+const VG  = 70;   // vertical gap between levels
 const PAD = 24;   // canvas padding
 
 // ── Node colour themes ────────────────────────────────────────────
@@ -17,14 +17,6 @@ const THEME: Record<TraceNode['type'], { bg: string; border: string; text: strin
   death:   { bg: '#1f0000', border: '#ef4444', text: '#f87171', glow: '#ef444433' },
 };
 
-const DIMMED: Record<TraceNode['type'], { bg: string; border: string; text: string }> = {
-  info:    { bg: '#0c1017', border: '#1e293b', text: '#334155' },
-  success: { bg: '#020f08', border: '#134e26', text: '#1a5c38' },
-  warn:    { bg: '#100900', border: '#78430a', text: '#7a4a00' },
-  action:  { bg: '#050e1c', border: '#1d3560', text: '#1e3a6e' },
-  death:   { bg: '#0d0000', border: '#5c1111', text: '#5c1111' },
-};
-
 // ── Layout types ──────────────────────────────────────────────────
 interface Placed {
   node: TraceNode;
@@ -34,7 +26,7 @@ interface Placed {
   children: Placed[];
 }
 
-// ── Full-tree layout (always include every node) ──────────────────
+// ── Full-tree layout ──────────────────────────────────────────────
 function subtreeWidth(node: TraceNode, nodeKey: string, cache: Map<string, number>): number {
   if (cache.has(nodeKey)) return cache.get(nodeKey)!;
   let w: number;
@@ -74,12 +66,12 @@ function placeTree(
 }
 
 // ── Flatten ───────────────────────────────────────────────────────
-interface Edge { x1: number; y1: number; x2: number; y2: number; childKey: string }
+interface Edge { x1: number; y1: number; x2: number; y2: number }
 
 function flatten(placed: Placed, nodes: Placed[], edges: Edge[]) {
   nodes.push(placed);
   for (const child of placed.children) {
-    edges.push({ x1: placed.cx, y1: placed.ty + NH, x2: child.cx, y2: child.ty, childKey: child.key });
+    edges.push({ x1: placed.cx, y1: placed.ty + NH, x2: child.cx, y2: child.ty });
     flatten(child, nodes, edges);
   }
 }
@@ -92,77 +84,26 @@ function treeSize(placed: Placed): { w: number; h: number } {
   return { w: maxX + PAD, h: maxY + PAD };
 }
 
-// ── Check whether a node-key is inside a dimmed subtree ───────────
-function isDimmedKey(key: string, dimmed: Set<string>): boolean {
-  // A node is dimmed if any ancestor's key is in the dimmed set
-  for (const dk of dimmed) {
-    if (key.startsWith(dk + '.')) return true;
-  }
-  return false;
-}
-
 // ── Single node renderer ──────────────────────────────────────────
-function NodeRect({
-  placed,
-  dimmed,
-  onToggle,
-}: {
-  placed: Placed;
-  dimmed: Set<string>;
-  onToggle: (key: string) => void;
-}) {
-  const { node, key, cx, ty } = placed;
-  const selfDimmed = isDimmedKey(key, dimmed);
-  const childrenDimmed = dimmed.has(key);           // this node's children are dimmed
-  const hasChildren = node.children.length > 0;
+function NodeRect({ placed }: { placed: Placed }) {
+  const { node, cx, ty } = placed;
+  const theme = THEME[node.type];
   const x = cx - NW / 2;
 
-  const theme  = selfDimmed ? DIMMED[node.type] : THEME[node.type];
-  const opacity = selfDimmed ? 0.35 : 1;
-
   return (
-    <g
-      opacity={opacity}
-      style={{ cursor: hasChildren ? 'pointer' : 'default' }}
-      onClick={() => hasChildren && onToggle(key)}
-    >
-      {/* Glow (only when not dimmed) */}
-      {!selfDimmed && THEME[node.type].glow !== 'none' && (
-        <rect x={x - 3} y={ty - 3} width={NW + 6} height={NH + 6} rx={10} fill={THEME[node.type].glow} />
+    <g>
+      {/* Glow */}
+      {theme.glow !== 'none' && (
+        <rect x={x - 3} y={ty - 3} width={NW + 6} height={NH + 6} rx={10} fill={theme.glow} />
       )}
 
       {/* Body */}
-      <rect
-        x={x} y={ty} width={NW} height={NH} rx={7}
-        fill={theme.bg}
-        stroke={theme.border}
-        strokeWidth={selfDimmed ? 1 : 1.5}
-        strokeDasharray={selfDimmed ? '4 3' : 'none'}
+      <rect x={x} y={ty} width={NW} height={NH} rx={7}
+        fill={theme.bg} stroke={theme.border} strokeWidth={1.5}
       />
 
-      {/* "Visited / dimmed" badge — strikethrough line on dimmed nodes */}
-      {selfDimmed && (
-        <line
-          x1={x + 8} y1={ty + NH / 2}
-          x2={x + NW - 8} y2={ty + NH / 2}
-          stroke={theme.border} strokeWidth={1} opacity={0.6}
-        />
-      )}
-
-      {/* Expand/collapse indicator */}
-      {hasChildren && (
-        <text
-          x={x + NW - 11} y={ty + NH / 2}
-          fontSize={9} fill={theme.border}
-          textAnchor="middle" dominantBaseline="middle"
-          style={{ userSelect: 'none' }}
-        >
-          {childrenDimmed ? '⊕' : '⊖'}
-        </text>
-      )}
-
       {/* Label */}
-      <foreignObject x={x + 8} y={ty} width={NW - 26} height={NH}>
+      <foreignObject x={x + 8} y={ty} width={NW - 16} height={NH}>
         <div
           style={{
             height: NH,
@@ -185,19 +126,7 @@ function NodeRect({
 }
 
 // ── Main component ────────────────────────────────────────────────
-export default memo(function TreeViz({ node, initialDimmed }: { node: TraceNode; initialDimmed?: string[] }) {
-  // dimmed = set of parent keys whose children are faded (but still visible)
-  const [dimmed, setDimmed] = useState<Set<string>>(() => new Set(initialDimmed ?? []));
-
-  const toggle = useCallback((key: string) => {
-    setDimmed(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
-  }, []);
-
-  // Layout uses the full tree every time (no pruning)
+export default memo(function TreeViz({ node }: { node: TraceNode }) {
   const cache  = new Map<string, number>();
   const placed = placeTree(node, 'root', 0, PAD, cache);
   const allNodes: Placed[] = [];
@@ -211,17 +140,15 @@ export default memo(function TreeViz({ node, initialDimmed }: { node: TraceNode;
         {/* Edges */}
         <g>
           {edges.map((e, i) => {
-            const childDimmed = isDimmedKey(e.childKey, dimmed);
             const my = (e.y1 + e.y2) / 2;
             return (
               <path
                 key={i}
                 d={`M ${e.x1} ${e.y1} C ${e.x1} ${my}, ${e.x2} ${my}, ${e.x2} ${e.y2}`}
                 fill="none"
-                stroke={childDimmed ? '#1a2535' : '#1e3a5f'}
-                strokeWidth={childDimmed ? 1 : 1.5}
-                strokeDasharray={childDimmed ? '4 3' : 'none'}
-                opacity={childDimmed ? 0.4 : 0.85}
+                stroke="#1e3a5f"
+                strokeWidth={1.5}
+                opacity={0.85}
               />
             );
           })}
@@ -229,7 +156,7 @@ export default memo(function TreeViz({ node, initialDimmed }: { node: TraceNode;
         {/* Nodes */}
         <g>
           {allNodes.map(p => (
-            <NodeRect key={p.key} placed={p} dimmed={dimmed} onToggle={toggle} />
+            <NodeRect key={p.key} placed={p} />
           ))}
         </g>
       </svg>

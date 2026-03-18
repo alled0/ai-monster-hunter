@@ -114,19 +114,19 @@ export default function App() {
     trailMap.set(k, 0.15 + t * 0.55);
   });
 
-  // Build combined tree: root → each turn node (colored by outcome) → trace children
-  const combinedTree: TraceNode | null = turnHistory.length > 0 ? {
+  // Turn history tree: root → each turn as a leaf node colored by outcome
+  const historyTree: TraceNode | null = turnHistory.length > 0 ? {
     label: `${algo} — ${turnHistory.length} turn${turnHistory.length === 1 ? '' : 's'}`,
     type: 'info',
     children: turnHistory.map(rec => ({
-      ...rec.trace,
-      label: `${rec.trace.label}  [${rec.outcome}]`,
+      label: `T${rec.turn}`,
       type: OUTCOME_TYPE[rec.outcome],
+      children: [],
     })),
   } : null;
 
-  // All turn nodes dimmed (collapsed) by default except the latest
-  const initialDimmed = turnHistory.slice(0, -1).map((_, i) => `root.${i}`);
+  // Latest turn's full algorithm trace
+  const latestTrace = turnHistory.length > 0 ? turnHistory[turnHistory.length - 1].trace : null;
 
   return (
     <div className="app">
@@ -294,11 +294,11 @@ export default function App() {
         </div>
       </div>
 
-      {combinedTree && (
+      {historyTree && (
         <div className="tree-section">
           <div className="card tree-card">
             <div className="tree-card-header">
-              <h3 className="card-title" style={{ marginBottom: 0 }}>Decision Tree — Turn History</h3>
+              <h3 className="card-title" style={{ marginBottom: 0 }}>Turn History</h3>
               <div className="turn-legend">
                 <span className="turn-legend-item explore">Explore</span>
                 <span className="turn-legend-item revisit">Revisit</span>
@@ -306,8 +306,15 @@ export default function App() {
                 <span className="turn-legend-item death">Death</span>
               </div>
             </div>
-            <TreeViz node={combinedTree} initialDimmed={initialDimmed} />
+            <TreeViz node={historyTree} />
           </div>
+
+          {latestTrace && (
+            <div className="card tree-card" style={{ marginTop: 12 }}>
+              <h3 className="card-title">Decision Tree — Turn {turnHistory[turnHistory.length - 1].turn}</h3>
+              <TreeViz node={latestTrace} />
+            </div>
+          )}
         </div>
       )}
 
