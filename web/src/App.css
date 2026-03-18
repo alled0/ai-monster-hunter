@@ -234,8 +234,8 @@
   align-items: center;
   justify-content: center;
   z-index: 10;
-  background: rgba(6, 10, 20, 0.72);
-  backdrop-filter: blur(6px);
+  background: rgba(6, 10, 20, 0.55);
+  backdrop-filter: blur(2px);
 }
 
 .start-overlay-content {
@@ -322,8 +322,9 @@
   border: 1px solid #1e293b;
   border-radius: 12px;
   padding: 14px 16px;
-  flex: 1;
 }
+
+.panel .card { flex: 1; }
 
 .card-title {
   font-size: 0.7rem;
