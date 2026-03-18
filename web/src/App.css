@@ -496,16 +496,15 @@
 
 .tree-card { padding: 14px 12px; overflow: hidden; min-width: 0; }
 
-/* ── TreeViz canvas (fixed-height scrollable) ─────────────────────── */
+/* ── TreeViz canvas ───────────────────────────────────────────────── */
 .treeviz-canvas {
-  position: relative;
-  background: #060b14;
-  border: 1px solid #0f1f35;
-  border-radius: 10px;
-  box-shadow: inset 0 2px 12px rgba(0,0,0,0.5);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
+  background: #060c18;
+  border: 1px solid #112032;
+  border-radius: 10px;
+  box-shadow: inset 0 0 32px rgba(0,0,0,0.6);
+  overflow: hidden;
 }
 
 .treeviz-toolbar {
@@ -513,38 +512,40 @@
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-  padding: 6px 10px;
-  border-bottom: 1px solid #0f1f35;
-  background: #070d1a;
+  padding: 5px 12px;
+  border-bottom: 1px solid #0e1d2e;
+  background: #050b16;
   flex-shrink: 0;
 }
 
 .treeviz-count {
-  font-size: 0.65rem;
-  color: #334155;
+  font-size: 0.63rem;
+  color: #2d4460;
   font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0.3px;
 }
 
+.treeviz-cap { color: #f59e0b; }
+
 .treeviz-reset-btn {
-  font-size: 0.65rem;
+  font-size: 0.63rem;
   padding: 3px 10px;
   border-radius: 5px;
-  border: 1px solid #1e3a5f;
-  background: #0c1e3d;
-  color: #60a5fa;
+  border: 1px solid #1a3050;
+  background: #0a1828;
+  color: #3b82f6;
   cursor: pointer;
   font-family: inherit;
-  transition: background 0.1s;
+  letter-spacing: 0.2px;
+  transition: background 0.12s, border-color 0.12s;
 }
-.treeviz-reset-btn:hover { background: #1d3a6e; }
+.treeviz-reset-btn:hover { background: #0f2240; border-color: #3b82f6; }
 
 .treeviz-scroll {
   overflow: auto;
   height: 480px;
   scrollbar-width: thin;
-  scrollbar-color: #1e3a5f transparent;
-  padding: 8px;
-  flex: 1;
+  scrollbar-color: #1a3050 transparent;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────── */

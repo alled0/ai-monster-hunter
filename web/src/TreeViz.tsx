@@ -2,93 +2,136 @@ import { memo } from 'react';
 import type { TraceNode } from './engine/types';
 
 // ── Layout constants ──────────────────────────────────────────────
-const NW  = 190;   // node width
-const NH  = 36;    // node height
-const HG  = 20;    // horizontal gap between siblings
-const VG  = 55;    // vertical gap between levels  (≥40px as required)
-const PAD = 32;    // canvas padding
+const NR  = 26;    // node radius → 52px diameter
+const HG  = 28;    // horizontal gap between adjacent circle edges
+const VG  = 100;   // vertical gap between level centers (gap between edges = 100 - 52 = 48px ≥ 40px)
+const PAD = 48;    // canvas padding
 
-// ── Colour themes ─────────────────────────────────────────────────
-const THEME: Record<TraceNode['type'], { bg: string; border: string; text: string; glow: string }> = {
-  info:    { bg: '#131e2e', border: '#334155', text: '#94a3b8', glow: 'none'       },
-  success: { bg: '#052e16', border: '#10b981', text: '#34d399', glow: '#10b98133' },
-  warn:    { bg: '#2d1900', border: '#f59e0b', text: '#fbbf24', glow: '#f59e0b33' },
-  action:  { bg: '#0c1e3d', border: '#3b82f6', text: '#60a5fa', glow: '#3b82f633' },
-  death:   { bg: '#1f0000', border: '#ef4444', text: '#f87171', glow: '#ef444433' },
+// ── Colours (outline-only style, dark fill) ───────────────────────
+const ROOT_STROKE  = '#ef4444';   // red for root
+const ROOT_TEXT    = '#fca5a5';
+
+const STROKE: Record<TraceNode['type'], string> = {
+  info:    '#334155',   // muted gray
+  success: '#10b981',   // green
+  warn:    '#f59e0b',   // amber
+  action:  '#3b82f6',   // blue
+  death:   '#ef4444',   // red
 };
 
+const TEXT_CLR: Record<TraceNode['type'], string> = {
+  info:    '#64748b',
+  success: '#34d399',
+  warn:    '#fbbf24',
+  action:  '#60a5fa',
+  death:   '#f87171',
+};
+
+const NODE_BG = '#07101f';  // dark fill inside every circle
+
+// ── Label helpers ─────────────────────────────────────────────────
+function topLabel(label: string): string {
+  const t = label.trim();
+  const m = t.match(/Turn\s*(\d+)/);       if (m) return `T${m[1]}`;
+  if (/moving\s+(\w)/i.test(t))            { const d = t.match(/moving\s+(\w)/i)!; return `→${d[1]}`; }
+  if (/attack/i.test(t))                    return 'ATK';
+  if (/\bWAIT\b/i.test(t))                 return 'WAIT';
+  if (/no safe|no path|no frontier/i.test(t)) return '✗';
+  if (/A\*.*path|path.*A\*/i.test(t))      return 'A*';
+  if (/BFS.*path|path.*BFS/i.test(t))      return 'BFS';
+  if (/perception/i.test(t))               return 'PER';
+  if (/frontier/i.test(t))                 return 'FRT';
+  if (/beatable/i.test(t))                 return 'BT';
+  if (/approach/i.test(t))                 return 'APR';
+  const lvM = t.match(/Lv\s*(\d+)/);       if (lvM) return `L${lvM[1]}`;
+  if (/target/i.test(t))                   return 'TGT';
+  if (/total\s+monster/i.test(t))          return 'TOT';
+  if (/scanned/i.test(t))                  return 'SCN';
+  const words = t.split(/[\s—–\[\]]+/).filter(Boolean);
+  return words[0]?.slice(0, 4).toUpperCase() ?? '?';
+}
+
+function botLabel(label: string): string {
+  const t = label.trim();
+  const numM = t.match(/:\s*(\d+)/) ?? t.match(/dist=(\d+)/) ?? t.match(/(\d+)\s+step/);
+  if (numM) return numM[1];
+  const coord = t.match(/\((\d+),(\d+)\)/);
+  if (coord) return `${coord[1]},${coord[2]}`;
+  const turnOutcome = t.match(/\[(kill|death|revisit|explore)\]/i);
+  if (turnOutcome) return turnOutcome[1].slice(0, 3);
+  return '';
+}
+
 // ── Layout types ──────────────────────────────────────────────────
-interface Placed { node: TraceNode; key: string; cx: number; ty: number; children: Placed[] }
+interface Placed { node: TraceNode; key: string; cx: number; cy: number; children: Placed[] }
 interface Edge   { x1: number; y1: number; x2: number; y2: number }
 
-// ── Reingold-Tilford width / placement (full tree — no collapse) ──
-function subtreeWidth(node: TraceNode, nodeKey: string, cache: Map<string, number>): number {
-  if (cache.has(nodeKey)) return cache.get(nodeKey)!;
+// ── Reingold-Tilford width ────────────────────────────────────────
+const LEAF_W = 2 * NR + HG;
+
+function subtreeWidth(node: TraceNode, nk: string, cache: Map<string, number>): number {
+  if (cache.has(nk)) return cache.get(nk)!;
   const w = node.children.length === 0
-    ? NW + HG
+    ? LEAF_W
     : Math.max(
-        node.children.reduce((s, c, i) => s + subtreeWidth(c, `${nodeKey}.${i}`, cache), 0),
-        NW + HG
+        node.children.reduce((s, c, i) => s + subtreeWidth(c, `${nk}.${i}`, cache), 0),
+        LEAF_W
       );
-  cache.set(nodeKey, w);
+  cache.set(nk, w);
   return w;
 }
 
-function placeTree(node: TraceNode, nodeKey: string, depth: number, leftX: number, cache: Map<string, number>): Placed {
-  const w  = subtreeWidth(node, nodeKey, cache);
+function placeTree(node: TraceNode, nk: string, depth: number, leftX: number, cache: Map<string, number>): Placed {
+  const w  = subtreeWidth(node, nk, cache);
   const cx = leftX + w / 2;
-  const ty = PAD + depth * (NH + VG);
+  const cy = PAD + NR + depth * VG;
 
-  let childLeft = leftX;
+  let cl = leftX;
   const children = node.children.map((child, i) => {
-    const childKey = `${nodeKey}.${i}`;
-    const cw = subtreeWidth(child, childKey, cache);
-    const placed = placeTree(child, childKey, depth + 1, childLeft, cache);
-    childLeft += cw;
-    return placed;
+    const ck = `${nk}.${i}`;
+    const cw = subtreeWidth(child, ck, cache);
+    const p  = placeTree(child, ck, depth + 1, cl, cache);
+    cl += cw;
+    return p;
   });
 
-  return { node, key: nodeKey, cx, ty, children };
+  return { node, key: nk, cx, cy, children };
 }
 
-function flatten(placed: Placed, nodes: Placed[], edges: Edge[]) {
-  nodes.push(placed);
-  for (const child of placed.children) {
-    edges.push({ x1: placed.cx, y1: placed.ty + NH, x2: child.cx, y2: child.ty });
+// ── Flatten ───────────────────────────────────────────────────────
+function flatten(p: Placed, nodes: Placed[], edges: Edge[]) {
+  nodes.push(p);
+  for (const child of p.children) {
+    // straight line: bottom center of parent → top center of child
+    edges.push({ x1: p.cx, y1: p.cy + NR, x2: child.cx, y2: child.cy - NR });
     flatten(child, nodes, edges);
   }
 }
 
-function treeSize(placed: Placed): { w: number; h: number } {
+function svgSize(placed: Placed): { w: number; h: number } {
   const nodes: Placed[] = [];
   flatten(placed, nodes, []);
-  const maxX = Math.max(...nodes.map(n => n.cx + NW / 2));
-  const maxY = Math.max(...nodes.map(n => n.ty + NH));
+  const maxX = Math.max(...nodes.map(n => n.cx + NR));
+  const maxY = Math.max(...nodes.map(n => n.cy + NR));
   return { w: maxX + PAD, h: maxY + PAD };
 }
 
-// ── Component (no interaction state — always fully expanded) ──────
+// ── Component ─────────────────────────────────────────────────────
 export default memo(function TreeViz({
-  node,
-  nodeCount,
-  maxNodes,
-  onReset,
+  node, nodeCount, maxNodes, onReset,
 }: {
-  node: TraceNode;
-  nodeCount: number;
-  maxNodes: number;
-  onReset: () => void;
+  node: TraceNode; nodeCount: number; maxNodes: number; onReset: () => void;
 }) {
   const cache    = new Map<string, number>();
   const placed   = placeTree(node, 'root', 0, PAD, cache);
   const allNodes: Placed[] = [];
   const edges:    Edge[]   = [];
   flatten(placed, allNodes, edges);
-  const { w, h } = treeSize(placed);
+  const { w, h } = svgSize(placed);
 
   return (
     <div className="treeviz-canvas">
-      {/* Toolbar — fixed, never scrolls */}
+      {/* Fixed toolbar */}
       <div className="treeviz-toolbar">
         <span className="treeviz-count">
           {nodeCount} / {maxNodes} nodes
@@ -97,51 +140,58 @@ export default memo(function TreeViz({
         <button className="treeviz-reset-btn" onClick={onReset}>↺ Reset</button>
       </div>
 
-      {/* Scrollable canvas — tree grows freely here */}
+      {/* Scrollable canvas */}
       <div className="treeviz-scroll">
         <svg width={w} height={h} style={{ display: 'block' }}>
 
-          {/* Curved edges */}
+          {/* Straight-line edges */}
           <g>
-            {edges.map((e, i) => {
-              const my = (e.y1 + e.y2) / 2;
-              return (
-                <path
-                  key={i}
-                  d={`M ${e.x1} ${e.y1} C ${e.x1} ${my}, ${e.x2} ${my}, ${e.x2} ${e.y2}`}
-                  fill="none" stroke="#1e3a5f" strokeWidth={1.5} opacity={0.8}
-                />
-              );
-            })}
+            {edges.map((e, i) => (
+              <line key={i}
+                x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}
+                stroke="#1a2d42" strokeWidth={1}
+              />
+            ))}
           </g>
 
-          {/* Nodes */}
+          {/* Circle nodes */}
           <g>
-            {allNodes.map(({ node: n, cx, ty, key }) => {
-              const theme = THEME[n.type];
-              const x = cx - NW / 2;
+            {allNodes.map(({ node: n, cx, cy, key }) => {
+              const isRoot  = key === 'root';
+              const stroke  = isRoot ? ROOT_STROKE  : STROKE[n.type];
+              const textClr = isRoot ? ROOT_TEXT     : TEXT_CLR[n.type];
+              const sw      = isRoot ? 2.5 : 1.5;
+              const top     = topLabel(n.label);
+              const bot     = botLabel(n.label);
+              const topY    = bot ? cy - 7 : cy;
+              const botY    = cy + 8;
+
               return (
                 <g key={key}>
-                  {theme.glow !== 'none' && (
-                    <rect x={x-3} y={ty-3} width={NW+6} height={NH+6} rx={10} fill={theme.glow} />
-                  )}
-                  <rect x={x} y={ty} width={NW} height={NH} rx={7}
-                    fill={theme.bg} stroke={theme.border} strokeWidth={1.5}
+                  <title>{n.label}</title>
+                  <circle cx={cx} cy={cy} r={NR}
+                    fill={NODE_BG} stroke={stroke} strokeWidth={sw}
                   />
-                  <foreignObject x={x+8} y={ty} width={NW-16} height={NH}>
-                    <div
-                      style={{
-                        height: NH, display: 'flex', alignItems: 'center',
-                        fontSize: '10px',
-                        fontFamily: "'JetBrains Mono','Fira Code','Consolas',monospace",
-                        color: theme.text, overflow: 'hidden',
-                        whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                      }}
-                      title={n.label}
+                  <text x={cx} y={topY}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fontSize={bot ? 9 : 10}
+                    fontFamily="'JetBrains Mono','Fira Code','Consolas',monospace"
+                    fill={textClr}
+                    style={{ userSelect: 'none' }}
+                  >
+                    {top}
+                  </text>
+                  {bot && (
+                    <text x={cx} y={botY}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fontSize={8}
+                      fontFamily="'JetBrains Mono','Fira Code','Consolas',monospace"
+                      fill={textClr} opacity={0.65}
+                      style={{ userSelect: 'none' }}
                     >
-                      {n.label}
-                    </div>
-                  </foreignObject>
+                      {bot}
+                    </text>
+                  )}
                 </g>
               );
             })}
