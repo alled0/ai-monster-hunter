@@ -486,26 +486,65 @@
 /* ── Decision Tree ───────────────────────────────────────────────── */
 .tree-section {
   width: 100%;
-  max-width: 900px;
+  max-width: 960px;
   min-width: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .tree-card { padding: 14px 12px; overflow: hidden; min-width: 0; }
 
-.treeviz-wrap {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 460px;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  scrollbar-width: thin;
-  scrollbar-color: #1e3a5f transparent;
-  border-radius: 8px;
+/* ── TreeViz canvas (fixed-height scrollable) ─────────────────────── */
+.treeviz-canvas {
+  position: relative;
   background: #060b14;
   border: 1px solid #0f1f35;
+  border-radius: 10px;
+  box-shadow: inset 0 2px 12px rgba(0,0,0,0.5);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.treeviz-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #0f1f35;
+  background: #070d1a;
+  flex-shrink: 0;
+}
+
+.treeviz-count {
+  font-size: 0.65rem;
+  color: #334155;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.treeviz-reset-btn {
+  font-size: 0.65rem;
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid #1e3a5f;
+  background: #0c1e3d;
+  color: #60a5fa;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.1s;
+}
+.treeviz-reset-btn:hover { background: #1d3a6e; }
+
+.treeviz-scroll {
+  overflow: auto;
+  height: 480px;
+  scrollbar-width: thin;
+  scrollbar-color: #1e3a5f transparent;
   padding: 8px;
+  flex: 1;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────── */

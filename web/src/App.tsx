@@ -310,9 +310,9 @@ export default function App() {
           </div>
 
           {latestTrace && (
-            <div className="card tree-card" style={{ marginTop: 12 }}>
+            <div className="card tree-card">
               <h3 className="card-title">Decision Tree — Turn {turnHistory[turnHistory.length - 1].turn}</h3>
-              <TreeViz node={latestTrace} />
+              <TreeViz key={turnHistory.length} node={latestTrace} />
             </div>
           )}
         </div>
