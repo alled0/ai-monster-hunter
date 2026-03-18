@@ -229,23 +229,18 @@ function basicBFSStep(state: GameState, t: Tracer): void {
         for (const d of DIRS) {
           const [dr, dc] = VEC[d];
           const ar = mr + dr, ac = mc + dc;
-          if (!local.knownFree.has(key(ar, ac))) continue;
+          const ak = key(ar, ac);
+          // Skip approach cells not yet known to be free, or that are danger tiles
+          if (!local.knownFree.has(ak) || danger.has(ak)) continue;
           const path = bfs(agent.r, agent.c, ar, ac, R, C, blocked, danger);
           if (path.length) {
-            const [nr, nc] = [agent.r + VEC[path[0]][0], agent.c + VEC[path[0]][1]];
-            if (danger.has(key(nr, nc))) {
-              t.log(`Path found but next cell is a danger zone — WAIT`, 'warn');
-              executeAction(state, 'WAIT', null);
-              acted = true;
-              return;
-            }
             t.log(`BFS path found — moving ${path[0]} (${path.length} steps)`, 'action');
             executeAction(state, 'MOVE', path[0]);
             acted = true;
             return;
           }
         }
-        t.log(`No path to (${mr},${mc}) via known cells`, 'warn');
+        t.log(`No safe path to (${mr},${mc})`, 'warn');
       });
       if (acted) return;
     }
@@ -284,7 +279,7 @@ function basicBFSStep(state: GameState, t: Tracer): void {
       }
     }
 
-    // All danger-avoiding paths blocked — try ignoring danger to avoid permanent stall
+    // All danger-avoiding paths blocked — retry ignoring danger (knownMonsters still blocked)
     for (const [gr, gc] of frontiers) {
       if (gr === agent.r && gc === agent.c) continue;
       const path = bfs(agent.r, agent.c, gr, gc, R, C, blocked, new Set());
@@ -295,7 +290,30 @@ function basicBFSStep(state: GameState, t: Tracer): void {
       }
     }
 
-    t.log(`Completely surrounded — WAIT`, 'warn');
+    // knownMonsters may be blocking all routes — use actual monsters map + ignore danger
+    const actualBlocked = new Set(monsters.keys());
+    for (const [gr, gc] of frontiers) {
+      if (gr === agent.r && gc === agent.c) continue;
+      const path = bfs(agent.r, agent.c, gr, gc, R, C, actualBlocked, new Set());
+      if (path.length) {
+        t.log(`Known-monster block bypassed — moving ${path[0]}`, 'warn');
+        executeAction(state, 'MOVE', path[0]);
+        return;
+      }
+    }
+
+    // Absolute last resort: any adjacent non-occupied cell
+    for (const d of DIRS) {
+      const [dr, dc] = VEC[d];
+      const nr = agent.r + dr, nc = agent.c + dc;
+      if (nr >= 0 && nr < R && nc >= 0 && nc < C && !monsters.has(key(nr, nc))) {
+        t.log(`Last resort — moving ${d}`, 'warn');
+        executeAction(state, 'MOVE', d);
+        return;
+      }
+    }
+
+    t.log(`Completely surrounded by monsters — WAIT`, 'warn');
     executeAction(state, 'WAIT', null);
   });
 }

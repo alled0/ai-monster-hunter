@@ -50,8 +50,8 @@ export function executeAction(
   } else if (action === 'ATTACK' && arg) {
     const monster = state.monsters.get(arg as string);
     if (monster) {
-      state.monsters.delete(arg as string);
       if (state.agent.level >= monster.level) {
+        state.monsters.delete(arg as string);
         state.agent.kills++;
         state.agent.level++;
       } else {
