@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type GameState, type AlgorithmId, type TraceNode, ALGORITHMS, ARROW, key } from './engine/types';
-
-type TurnOutcome = 'explore' | 'revisit' | 'kill' | 'death';
-const OUTCOME_TYPE: Record<TurnOutcome, TraceNode['type']> = {
-  explore: 'info',
-  revisit: 'warn',
-  kill:    'success',
-  death:   'death',
-};
 import { createEnvironment } from './engine/environment';
 import { stepGame } from './engine/algorithms';
 import Benchmark from './Benchmark';
@@ -16,7 +8,20 @@ import './App.css';
 
 const ROWS = 10, COLS = 10, N_MONSTERS = 8;
 const TRAIL_MAX = 500;
-const HISTORY_MAX = 100;
+const HISTORY_MAX = 500;  // keep full run history; tree capped separately
+const TREE_MAX = 100;     // max nodes in the combined decision tree
+
+type TurnOutcome = 'explore' | 'revisit' | 'kill' | 'death';
+const OUTCOME_TYPE: Record<TurnOutcome, TraceNode['type']> = {
+  explore: 'info',
+  revisit: 'warn',
+  kill:    'success',
+  death:   'death',
+};
+
+function countNodes(node: TraceNode): number {
+  return 1 + node.children.reduce((s, c) => s + countNodes(c), 0);
+}
 
 interface TurnRecord { turn: number; trace: TraceNode; outcome: TurnOutcome; }
 
@@ -47,6 +52,7 @@ export default function App() {
   const [paused, setPaused] = useState(false);
   const [turnHistory, setTurnHistory] = useState<TurnRecord[]>([]);
   const [trail, setTrail] = useState<string[]>([]);
+  const [treeStartIdx, setTreeStartIdx] = useState(0);
 
   const stateRef = useRef(state);
   const algoRef = useRef(algo);
@@ -61,6 +67,7 @@ export default function App() {
     setTurnHistory([]);
     setTrail([]);
     setPaused(false);
+    setTreeStartIdx(0);
     visitedRef.current = new Set();
   }, []);
 
@@ -102,6 +109,7 @@ export default function App() {
     setTurnHistory([]);
     setTrail([]);
     setPaused(false);
+    setTreeStartIdx(0);
     visitedRef.current = new Set();
   };
 
@@ -114,19 +122,25 @@ export default function App() {
     trailMap.set(k, 0.15 + t * 0.55);
   });
 
-  // Turn history tree: root → each turn as a leaf node colored by outcome
-  const historyTree: TraceNode | null = turnHistory.length > 0 ? {
+  // Build combined tree automatically from turnHistory — root → turn nodes → trace children
+  // Cap total nodes at TREE_MAX; stop adding turns once cap would be exceeded
+  const visibleTurns: TurnRecord[] = [];
+  let treeNodeCount = 1; // root
+  for (const rec of turnHistory.slice(treeStartIdx)) {
+    const cost = countNodes(rec.trace); // trace root + all its descendants
+    if (treeNodeCount + cost > TREE_MAX) break;
+    visibleTurns.push(rec);
+    treeNodeCount += cost;
+  }
+
+  const combinedTree: TraceNode | null = visibleTurns.length > 0 ? {
     label: `${algo} — ${turnHistory.length} turn${turnHistory.length === 1 ? '' : 's'}`,
     type: 'info',
-    children: turnHistory.map(rec => ({
-      label: `T${rec.turn}`,
+    children: visibleTurns.map(rec => ({
+      ...rec.trace,
       type: OUTCOME_TYPE[rec.outcome],
-      children: [],
     })),
   } : null;
-
-  // Latest turn's full algorithm trace
-  const latestTrace = turnHistory.length > 0 ? turnHistory[turnHistory.length - 1].trace : null;
 
   return (
     <div className="app">
@@ -294,11 +308,11 @@ export default function App() {
         </div>
       </div>
 
-      {historyTree && (
+      {combinedTree && (
         <div className="tree-section">
           <div className="card tree-card">
             <div className="tree-card-header">
-              <h3 className="card-title" style={{ marginBottom: 0 }}>Turn History</h3>
+              <h3 className="card-title" style={{ marginBottom: 0 }}>Decision Tree</h3>
               <div className="turn-legend">
                 <span className="turn-legend-item explore">Explore</span>
                 <span className="turn-legend-item revisit">Revisit</span>
@@ -306,15 +320,13 @@ export default function App() {
                 <span className="turn-legend-item death">Death</span>
               </div>
             </div>
-            <TreeViz node={historyTree} />
+            <TreeViz
+              node={combinedTree}
+              nodeCount={treeNodeCount}
+              maxNodes={TREE_MAX}
+              onReset={() => setTreeStartIdx(turnHistory.length)}
+            />
           </div>
-
-          {latestTrace && (
-            <div className="card tree-card">
-              <h3 className="card-title">Decision Tree — Turn {turnHistory[turnHistory.length - 1].turn}</h3>
-              <TreeViz key={turnHistory.length} node={latestTrace} />
-            </div>
-          )}
         </div>
       )}
 
