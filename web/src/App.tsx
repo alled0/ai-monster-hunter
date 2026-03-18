@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { type GameState, type AlgorithmId, type TraceNode, ALGORITHMS, ARROW, key } from './engine/types';
+
+type TurnOutcome = 'explore' | 'revisit' | 'kill' | 'death';
+const OUTCOME_TYPE: Record<TurnOutcome, TraceNode['type']> = {
+  explore: 'info',
+  revisit: 'warn',
+  kill:    'success',
+  death:   'death',
+};
 import { createEnvironment } from './engine/environment';
 import { stepGame } from './engine/algorithms';
 import Benchmark from './Benchmark';
@@ -10,7 +18,6 @@ const ROWS = 10, COLS = 10, N_MONSTERS = 8;
 const TRAIL_MAX = 500;
 const HISTORY_MAX = 100;
 
-type TurnOutcome = 'explore' | 'revisit' | 'kill' | 'death';
 interface TurnRecord { turn: number; trace: TraceNode; outcome: TurnOutcome; }
 
 function levelColor(level: number): string {
@@ -39,7 +46,6 @@ export default function App() {
   const [speed, setSpeed] = useState(300);
   const [paused, setPaused] = useState(false);
   const [turnHistory, setTurnHistory] = useState<TurnRecord[]>([]);
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const [trail, setTrail] = useState<string[]>([]);
 
   const stateRef = useRef(state);
@@ -53,7 +59,6 @@ export default function App() {
   const reset = useCallback(() => {
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
     setTurnHistory([]);
-    setSelectedIdx(null);
     setTrail([]);
     setPaused(false);
     visitedRef.current = new Set();
@@ -95,7 +100,6 @@ export default function App() {
     algoRef.current = id;
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
     setTurnHistory([]);
-    setSelectedIdx(null);
     setTrail([]);
     setPaused(false);
     visitedRef.current = new Set();
@@ -110,16 +114,19 @@ export default function App() {
     trailMap.set(k, 0.15 + t * 0.55);
   });
 
-  const effectiveIdx = selectedIdx !== null ? selectedIdx : turnHistory.length - 1;
-  const displayedRecord = turnHistory[effectiveIdx] ?? null;
-  const histScrollRef = useRef<HTMLDivElement>(null);
+  // Build combined tree: root → each turn node (colored by outcome) → trace children
+  const combinedTree: TraceNode | null = turnHistory.length > 0 ? {
+    label: `${algo} — ${turnHistory.length} turn${turnHistory.length === 1 ? '' : 's'}`,
+    type: 'info',
+    children: turnHistory.map(rec => ({
+      ...rec.trace,
+      label: `${rec.trace.label}  [${rec.outcome}]`,
+      type: OUTCOME_TYPE[rec.outcome],
+    })),
+  } : null;
 
-  // Auto-scroll turn history to end when new turns arrive and nothing is selected
-  useEffect(() => {
-    if (selectedIdx === null && histScrollRef.current) {
-      histScrollRef.current.scrollLeft = histScrollRef.current.scrollWidth;
-    }
-  }, [turnHistory.length, selectedIdx]);
+  // All turn nodes dimmed (collapsed) by default except the latest
+  const initialDimmed = turnHistory.slice(0, -1).map((_, i) => `root.${i}`);
 
   return (
     <div className="app">
@@ -287,14 +294,11 @@ export default function App() {
         </div>
       </div>
 
-      {turnHistory.length > 0 && (
+      {combinedTree && (
         <div className="tree-section">
           <div className="card tree-card">
             <div className="tree-card-header">
-              <h3 className="card-title" style={{ marginBottom: 0 }}>
-                Decision Tree — Turn {displayedRecord?.turn ?? '–'}
-                {selectedIdx === null && <span className="tree-latest-badge">latest</span>}
-              </h3>
+              <h3 className="card-title" style={{ marginBottom: 0 }}>Decision Tree — Turn History</h3>
               <div className="turn-legend">
                 <span className="turn-legend-item explore">Explore</span>
                 <span className="turn-legend-item revisit">Revisit</span>
@@ -302,24 +306,7 @@ export default function App() {
                 <span className="turn-legend-item death">Death</span>
               </div>
             </div>
-
-            <div className="turn-history-scroll" ref={histScrollRef}>
-              {turnHistory.map((rec, idx) => {
-                const isSelected = idx === effectiveIdx;
-                return (
-                  <button
-                    key={idx}
-                    className={`turn-node turn-node-${rec.outcome}${isSelected ? ' turn-node-selected' : ''}`}
-                    onClick={() => setSelectedIdx(idx === turnHistory.length - 1 ? null : idx)}
-                    title={`Turn ${rec.turn} — ${rec.outcome}`}
-                  >
-                    {rec.turn}
-                  </button>
-                );
-              })}
-            </div>
-
-            {displayedRecord && <TreeViz node={displayedRecord.trace} />}
+            <TreeViz node={combinedTree} initialDimmed={initialDimmed} />
           </div>
         </div>
       )}

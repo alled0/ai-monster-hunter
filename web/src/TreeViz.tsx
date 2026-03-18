@@ -14,6 +14,7 @@ const THEME: Record<TraceNode['type'], { bg: string; border: string; text: strin
   success: { bg: '#052e16', border: '#10b981', text: '#34d399', glow: '#10b98133' },
   warn:    { bg: '#2d1900', border: '#f59e0b', text: '#fbbf24', glow: '#f59e0b33' },
   action:  { bg: '#0c1e3d', border: '#3b82f6', text: '#60a5fa', glow: '#3b82f633' },
+  death:   { bg: '#1f0000', border: '#ef4444', text: '#f87171', glow: '#ef444433' },
 };
 
 const DIMMED: Record<TraceNode['type'], { bg: string; border: string; text: string }> = {
@@ -21,6 +22,7 @@ const DIMMED: Record<TraceNode['type'], { bg: string; border: string; text: stri
   success: { bg: '#020f08', border: '#134e26', text: '#1a5c38' },
   warn:    { bg: '#100900', border: '#78430a', text: '#7a4a00' },
   action:  { bg: '#050e1c', border: '#1d3560', text: '#1e3a6e' },
+  death:   { bg: '#0d0000', border: '#5c1111', text: '#5c1111' },
 };
 
 // ── Layout types ──────────────────────────────────────────────────
@@ -183,9 +185,9 @@ function NodeRect({
 }
 
 // ── Main component ────────────────────────────────────────────────
-export default memo(function TreeViz({ node }: { node: TraceNode }) {
+export default memo(function TreeViz({ node, initialDimmed }: { node: TraceNode; initialDimmed?: string[] }) {
   // dimmed = set of parent keys whose children are faded (but still visible)
-  const [dimmed, setDimmed] = useState<Set<string>>(new Set());
+  const [dimmed, setDimmed] = useState<Set<string>>(() => new Set(initialDimmed ?? []));
 
   const toggle = useCallback((key: string) => {
     setDimmed(prev => {

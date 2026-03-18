@@ -43,7 +43,7 @@ export type AlgorithmId = 'SimpleBFS' | 'BasicBFS' | 'AStar' | 'AStarManhattan';
 
 export interface TraceNode {
   label: string;
-  type: 'info' | 'success' | 'warn' | 'action';
+  type: 'info' | 'success' | 'warn' | 'action' | 'death';
   children: TraceNode[];
 }
 
