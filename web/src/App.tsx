@@ -37,7 +37,7 @@ export default function App() {
   const [trace, setTrace] = useState<TraceNode | null>(null);
   const [trail, setTrail] = useState<string[]>([]); // ordered oldest→newest, capped at TRAIL_MAX
 
-  const TRAIL_MAX = 200;
+  const TRAIL_MAX = 500;
 
   const stateRef = useRef(state);
   const algoRef = useRef(algo);
