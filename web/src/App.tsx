@@ -285,6 +285,12 @@ export default function App() {
 
       <footer className="footer">
         <p>Monster Hunter — SimpleBFS · BasicBFS · A* · A* + Manhattan</p>
+        <p>
+          Developed by{' '}
+          <a href="https://www.linkedin.com/in/alwaleed-meshal-almutairi-8a48ab263/" target="_blank" rel="noopener noreferrer" className="footer-link">Alwaleed Almutairi</a>
+          {' · '}
+          <a href="https://github.com/alled0" target="_blank" rel="noopener noreferrer" className="footer-link">GitHub</a>
+        </p>
       </footer>
       </>}
     </div>

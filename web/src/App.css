@@ -408,6 +408,18 @@
   font-size: 0.72rem;
   color: #334155;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footer-link {
+  color: #7c3aed;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  text-decoration: underline;
 }
 
 /* ── Decision Tree ───────────────────────────────────────────────── */
@@ -421,6 +433,9 @@
 .treeviz-wrap {
   overflow: auto;
   max-height: 460px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: #1e3a5f transparent;
   border-radius: 8px;
