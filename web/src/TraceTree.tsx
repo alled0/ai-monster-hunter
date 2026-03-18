@@ -6,6 +6,7 @@ const TYPE_COLOR: Record<TraceNode['type'], string> = {
   success: '#10b981',
   warn:    '#f59e0b',
   action:  '#3b82f6',
+  death:   '#ef4444',
 };
 
 const TYPE_DOT: Record<TraceNode['type'], string> = {
@@ -13,6 +14,7 @@ const TYPE_DOT: Record<TraceNode['type'], string> = {
   success: '#10b981',
   warn:    '#f59e0b',
   action:  '#3b82f6',
+  death:   '#ef4444',
 };
 
 interface NodeProps {
