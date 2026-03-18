@@ -49,7 +49,7 @@ export default function App() {
   const [algo, setAlgo] = useState<AlgorithmId>('SimpleBFS');
   const [state, setState] = useState<GameState>(() => createEnvironment(ROWS, COLS, N_MONSTERS));
   const [speed, setSpeed] = useState(300);
-  const [paused, setPaused] = useState(false);
+  const [paused, setPaused] = useState(true);
   const [turnHistory, setTurnHistory] = useState<TurnRecord[]>([]);
   const [trail, setTrail] = useState<string[]>([]);
   const [treeStartIdx, setTreeStartIdx] = useState(0);
@@ -66,7 +66,7 @@ export default function App() {
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
     setTurnHistory([]);
     setTrail([]);
-    setPaused(false);
+    setPaused(true);
     setTreeStartIdx(0);
     visitedRef.current = new Set();
   }, []);
@@ -108,7 +108,7 @@ export default function App() {
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
     setTurnHistory([]);
     setTrail([]);
-    setPaused(false);
+    setPaused(true);
     setTreeStartIdx(0);
     visitedRef.current = new Set();
   };
@@ -261,7 +261,7 @@ export default function App() {
             <h3 className="card-title">Controls</h3>
             <div className="ctrl-row">
               <button className="ctrl-btn primary" onClick={() => setPaused(p => !p)} disabled={done}>
-                {paused ? 'Play' : 'Pause'}
+                {turn === 0 ? 'Start' : paused ? 'Play' : 'Pause'}
               </button>
               <button className="ctrl-btn" onClick={step} disabled={done || !paused}>
                 Step
