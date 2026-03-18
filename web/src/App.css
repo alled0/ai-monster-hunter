@@ -124,7 +124,7 @@
 .main-layout {
   display: flex;
   gap: 20px;
-  align-items: flex-start;
+  align-items: stretch;
   width: 100%;
   max-width: 900px;
 }
@@ -310,6 +310,7 @@
 .panel {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   gap: 12px;
   flex: 1;
   min-width: 200px;
@@ -321,6 +322,7 @@
   border: 1px solid #1e293b;
   border-radius: 12px;
   padding: 14px 16px;
+  flex: 1;
 }
 
 .card-title {
