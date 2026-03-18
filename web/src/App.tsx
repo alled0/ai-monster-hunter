@@ -7,6 +7,11 @@ import TreeViz from './TreeViz';
 import './App.css';
 
 const ROWS = 10, COLS = 10, N_MONSTERS = 8;
+const TRAIL_MAX = 500;
+const HISTORY_MAX = 100;
+
+type TurnOutcome = 'explore' | 'revisit' | 'kill' | 'death';
+interface TurnRecord { turn: number; trace: TraceNode; outcome: TurnOutcome; }
 
 function levelColor(level: number): string {
   const colors = [
@@ -33,35 +38,47 @@ export default function App() {
   const [state, setState] = useState<GameState>(() => createEnvironment(ROWS, COLS, N_MONSTERS));
   const [speed, setSpeed] = useState(300);
   const [paused, setPaused] = useState(false);
-  const [history, setHistory] = useState<Array<{ turn: number; kills: number; level: number }>>([]);
-  const [trace, setTrace] = useState<TraceNode | null>(null);
-  const [trail, setTrail] = useState<string[]>([]); // ordered oldest→newest, capped at TRAIL_MAX
-
-  const TRAIL_MAX = 500;
+  const [turnHistory, setTurnHistory] = useState<TurnRecord[]>([]);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [trail, setTrail] = useState<string[]>([]);
 
   const stateRef = useRef(state);
   const algoRef = useRef(algo);
   const pausedRef = useRef(paused);
+  const visitedRef = useRef<Set<string>>(new Set());
   stateRef.current = state;
   algoRef.current = algo;
   pausedRef.current = paused;
 
   const reset = useCallback(() => {
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
-    setHistory([]);
-    setTrace(null);
+    setTurnHistory([]);
+    setSelectedIdx(null);
     setTrail([]);
     setPaused(false);
+    visitedRef.current = new Set();
   }, []);
 
   const step = useCallback(() => {
     const s = cloneState(stateRef.current);
     if (s.done) return;
+    const prevKills = s.agent.kills;
     const traceRoot = stepGame(s, algoRef.current);
-    setHistory(h => [...h, { turn: s.turn, kills: s.agent.kills, level: s.agent.level }]);
-    setTrace(traceRoot);
+    const newPos = key(s.agent.r, s.agent.c);
+
+    let outcome: TurnOutcome;
+    if (!s.agent.alive) outcome = 'death';
+    else if (s.agent.kills > prevKills) outcome = 'kill';
+    else if (visitedRef.current.has(newPos)) outcome = 'revisit';
+    else outcome = 'explore';
+    visitedRef.current.add(newPos);
+
+    setTurnHistory(h => {
+      const next = [...h, { turn: s.turn, trace: traceRoot, outcome }];
+      return next.length > HISTORY_MAX ? next.slice(next.length - HISTORY_MAX) : next;
+    });
     setTrail(prev => {
-      const next = [...prev, key(s.agent.r, s.agent.c)];
+      const next = [...prev, newPos];
       return next.length > TRAIL_MAX ? next.slice(next.length - TRAIL_MAX) : next;
     });
     setState(s);
@@ -77,21 +94,32 @@ export default function App() {
     setAlgo(id);
     algoRef.current = id;
     setState(createEnvironment(ROWS, COLS, N_MONSTERS));
-    setHistory([]);
-    setTrace(null);
+    setTurnHistory([]);
+    setSelectedIdx(null);
     setTrail([]);
     setPaused(false);
+    visitedRef.current = new Set();
   };
 
   const algoMeta = ALGORITHMS.find(a => a.id === algo)!;
   const { agent, monsters, dangerTiles: danger, turn, done, won } = state;
 
-  // Build trail lookup: cell key → opacity (0.08 oldest … 0.55 newest)
   const trailMap = new Map<string, number>();
   trail.forEach((k, i) => {
-    const t = (i + 1) / trail.length; // 0..1, 1 = newest
+    const t = (i + 1) / trail.length;
     trailMap.set(k, 0.15 + t * 0.55);
   });
+
+  const effectiveIdx = selectedIdx !== null ? selectedIdx : turnHistory.length - 1;
+  const displayedRecord = turnHistory[effectiveIdx] ?? null;
+  const histScrollRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll turn history to end when new turns arrive and nothing is selected
+  useEffect(() => {
+    if (selectedIdx === null && histScrollRef.current) {
+      histScrollRef.current.scrollLeft = histScrollRef.current.scrollWidth;
+    }
+  }, [turnHistory.length, selectedIdx]);
 
   return (
     <div className="app">
@@ -256,29 +284,42 @@ export default function App() {
               <span>Low level</span><span>High level</span>
             </div>
           </div>
-
-          <div className="card log-card">
-            <h3 className="card-title">Activity Log</h3>
-            <div className="log-scroll">
-              {history.length === 0 && <p className="log-empty">Simulation running...</p>}
-              {[...history].reverse().slice(0, 20).map((h, i) => (
-                <div key={i} className="log-row">
-                  <span className="log-turn">Turn {h.turn}</span>
-                  <span className="log-kills" style={{ color: '#10b981' }}>{h.kills} kills</span>
-                  <span className="log-level" style={{ color: '#3b82f6' }}>Lv{h.level}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
         </div>
       </div>
 
-      {trace && (
+      {turnHistory.length > 0 && (
         <div className="tree-section">
           <div className="card tree-card">
-            <h3 className="card-title">Decision Tree — last turn</h3>
-            <TreeViz node={trace} />
+            <div className="tree-card-header">
+              <h3 className="card-title" style={{ marginBottom: 0 }}>
+                Decision Tree — Turn {displayedRecord?.turn ?? '–'}
+                {selectedIdx === null && <span className="tree-latest-badge">latest</span>}
+              </h3>
+              <div className="turn-legend">
+                <span className="turn-legend-item explore">Explore</span>
+                <span className="turn-legend-item revisit">Revisit</span>
+                <span className="turn-legend-item kill">Kill</span>
+                <span className="turn-legend-item death">Death</span>
+              </div>
+            </div>
+
+            <div className="turn-history-scroll" ref={histScrollRef}>
+              {turnHistory.map((rec, idx) => {
+                const isSelected = idx === effectiveIdx;
+                return (
+                  <button
+                    key={idx}
+                    className={`turn-node turn-node-${rec.outcome}${isSelected ? ' turn-node-selected' : ''}`}
+                    onClick={() => setSelectedIdx(idx === turnHistory.length - 1 ? null : idx)}
+                    title={`Turn ${rec.turn} — ${rec.outcome}`}
+                  >
+                    {rec.turn}
+                  </button>
+                );
+              })}
+            </div>
+
+            {displayedRecord && <TreeViz node={displayedRecord.trace} />}
           </div>
         </div>
       )}
